@@ -1,0 +1,85 @@
+-- Saved by UniversalSynSaveInstance (Join to Copy Games) https://discord.gg/wx4ThpAsmw
+
+return {
+    DisplayName = "Ximba", 
+    Description = "...Você vai pagar CARO!!", 
+	RenderImage = "rbxassetid://78917754498940", 
+    Price = 2500,
+    GashingWoundHitData = function() --[[ Line: 2 ]] --[[ Name: getHitData ]]
+        return {
+            [0.33] = {
+                DamageDivisor = 5, 
+                Time = 0.15, 
+                DoLunge = true
+            }, 
+            [0.6] = {
+                DamageDivisor = 5, 
+                Time = 0.15, 
+                DoLunge = true
+            }, 
+            [1.1] = {
+                DamageDivisor = 5, 
+                Time = 0.15, 
+                DoLunge = true
+            }, 
+            [2.15] = {
+                DamageDivisor = 5, 
+                Time = 0.15
+            }, 
+            [2.983] = {
+                DamageDivisor = 5, 
+                Time = 0.15, 
+                DoLunge = true
+            }
+        };
+    end, 
+    GashingWoundCutsceneLength = 5.25, 
+    Relations = {
+		"RocasChance",
+		"KauanGuest"
+    }, 
+    LastManStandingEmotionalData = {
+		RocasChance = {
+			ThemeID = "rbxassetid://123778022799309", 
+			RoundTime = 78
+		}, 
+		KauanGuest = {
+			ThemeID = "rbxassetid://123778022799309",
+			RoundTime = 72
+		}
+    },
+    Sounds = {
+        Footsteps = {
+            "rbxassetid://127450195093503", 
+            "rbxassetid://79222929114377"
+        }, 
+        Stunned = "rbxassetid://115110356281126", 
+        Introduction = "rbxassetid://85254606926120", 
+        Swing = "rbxassetid://108907358619313", 
+        Hit = "rbxassetid://84033651171167", 
+        EnragedStart = "rbxassetid://139926313168788", 
+        GashingWoundHit = "rbxassetid://110592910502331", 
+        GashingWoundSwing = "rbxassetid://127793641088496", 
+        TerrorRadiusThemes = {
+            [45] = {
+                ID = "rbxassetid://129041014295889", 
+                BPM = 178
+            }, 
+            [30] = {
+                ID = "rbxassetid://73778163074488", 
+                BPM = 178
+            }, 
+            [15] = {
+                ID = "rbxassetid://107659472317683", 
+				BPM = 178
+	        },
+            [6] = {
+                ID = "rbxassetid://89169544192192", 
+                BPM = 178, 
+                Volume = 1.25, 
+                Chase = true, 
+				LoopRegion = NumberRange.new(1.355, 55.281)
+			}
+        }
+    }
+}
