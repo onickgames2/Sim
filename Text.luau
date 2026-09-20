@@ -5,35 +5,41 @@ return {
     Description = "...Você vai pagar CARO!!", 
 	RenderImage = "rbxassetid://78917754498940", 
     Price = 2500,
-    GashingWoundHitData = function() --[[ Line: 2 ]] --[[ Name: getHitData ]]
-        return {
-            [0.33] = {
-                DamageDivisor = 5, 
-                Time = 0.15, 
-                DoLunge = true
-            }, 
-            [0.6] = {
-                DamageDivisor = 5, 
-                Time = 0.15, 
-                DoLunge = true
-            }, 
-            [1.1] = {
-                DamageDivisor = 5, 
-                Time = 0.15, 
-                DoLunge = true
-            }, 
-            [2.15] = {
-                DamageDivisor = 5, 
-                Time = 0.15
-            }, 
-            [2.983] = {
-                DamageDivisor = 5, 
-                Time = 0.15, 
-                DoLunge = true
-            }
-        };
-    end, 
-    GashingWoundCutsceneLength = 5.25, 
+    Animations = {
+        GashingWoundHitData = function() --[[ Line: 2 ]] --[[ Name: getHitData ]]
+            return {
+                [0.33] = {
+                    DamageDivisor = 5, 
+                    Time = 0.15, 
+                    DoLunge = true
+                }, 
+                [0.6] = {
+                    DamageDivisor = 5, 
+                    Time = 0.15, 
+                    DoLunge = true
+                }, 
+                [1.1] = {
+                    DamageDivisor = 5, 
+                    Time = 0.15, 
+                    DoLunge = true
+                }, 
+                [2.15] = {
+                    DamageDivisor = 5, 
+                    Time = 0.15
+                }, 
+                [2.983] = {
+                    DamageDivisor = 5, 
+                    Time = 0.15, 
+                    DoLunge = true
+                }
+            };
+        end, 
+        GashingWoundCutsceneLength = 5.25,
+        ExecutionKauanGuest = {
+            KillerRig = "rbxassetid://76332185007326",
+            PlayerRig = "rbxassetid://79222929114377"
+        }
+    },
     Relations = {
 		"RocasChance",
 		"KauanGuest"
