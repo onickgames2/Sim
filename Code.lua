@@ -1,109 +1,352 @@
-local Players            = game:GetService("Players")
-local ReplicatedStorage  = game:GetService("ReplicatedStorage")
-local ServerStorage      = game:GetService("ServerStorage")
-local SoundService       = game:GetService("SoundService")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local PhysicsService = game:GetService("PhysicsService")
 
-local RE_Emote           = ReplicatedStorage.RemoteEvents.Emote
-local emotesSoundsFolder = ServerStorage.Musics:WaitForChild("Emotes")
+local BODY_TIME = 15
+local FADE_TIME = 3
+local RESPAWN_TIME = 5
 
--- [NOVO] Guarda o som ativo de cada jogador, pra poder parar instantaneamente
-local activeEmoteSounds = {}
+local CORPSE_COLLISION_GROUP = "Corpse"
 
--------------------------------------------------
--- EMOTE SOUND
--------------------------------------------------
+--------------------------------------------------
+-- CONFIGURAÇÃO DO COLLISION GROUP
+--------------------------------------------------
 
-local function StopPlayerEmoteSound(player)
-    local sound = activeEmoteSounds[player]
-    if sound then
-        sound:Stop()
-        sound:Destroy()
-        activeEmoteSounds[player] = nil
-    end
-end
-
--- Toca globalmente (todo mundo ouve, em loop) o som configurado pro emote, se
--- existir um Sound com o mesmo nome do emote dentro de ServerStorage.Musics.Emotes
-RE_Emote.OnServerEvent:Connect(function(player, emoteName)
-    if typeof(emoteName) ~= "string" then return end
-
-    StopPlayerEmoteSound(player) -- corta qualquer som de emote anterior desse jogador
-
-    local soundTemplate = emotesSoundsFolder:FindFirstChild(emoteName)
-    if not soundTemplate or not soundTemplate:IsA("Sound") then return end
-
-    local clone = soundTemplate:Clone()
-    clone.Name   = "EmoteSound_" .. emoteName
-    clone.Looped = true -- [NOVO] repete enquanto o emote estiver ativo
-    clone.Parent = SoundService
-    clone:Play()
-
-    activeEmoteSounds[player] = clone
+pcall(function()
+	PhysicsService:RegisterCollisionGroup(CORPSE_COLLISION_GROUP)
 end)
 
--------------------------------------------------
--- STOP EMOTE ON MOVEMENT (andar ou pular)
--------------------------------------------------
+-- Cadáver não colide com outro cadáver
+PhysicsService:CollisionGroupSetCollidable(
+	CORPSE_COLLISION_GROUP,
+	CORPSE_COLLISION_GROUP,
+	false
+)
 
--- Espera o AnimationHandler expor a API global (roda em outro Script, então
--- esperamos aparecer pra evitar erro de ordem de execução)
-local function WaitForAnimationLite()
-    while not _G.AnimationLite do
-        task.wait()
-    end
-    return _G.AnimationLite
+--------------------------------------------------
+-- RETORNA A PARTE CENTRAL DO CORPO
+--------------------------------------------------
+
+local function GetRootLimb(corpse)
+	return corpse:FindFirstChild("UpperTorso")
+		or corpse:FindFirstChild("Torso")
 end
 
-local AnimationLite = WaitForAnimationLite()
+--------------------------------------------------
+-- CONFIGURA FÍSICA DAS PARTES
+--------------------------------------------------
 
-local function IsMovementState(state)
-    return state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Freefall
+local function SetupCorpsePhysics(corpse)
+
+	for _, part in ipairs(corpse:GetDescendants()) do
+		if part:IsA("BasePart") then
+
+			part.Anchored = false
+
+			-- Permite colisão com o mapa
+			part.CanCollide = true
+
+			-- Mantém Touch/Query funcionando
+			part.CanTouch = true
+			part.CanQuery = true
+
+			-- Todas as partes do cadáver ficam nesse grupo
+			part.CollisionGroup = CORPSE_COLLISION_GROUP
+
+			-- Evita que a física fique exageradamente pesada
+			part.CustomPhysicalProperties = PhysicalProperties.new(
+				0.7, -- Density
+				0.5, -- Friction
+				0.1, -- Elasticity
+				1,
+				1
+			)
+		end
+	end
 end
 
-local function StopEmoteIfPlaying(character)
-    if character:GetAttribute("AnimationLitePlaying") then
-        AnimationLite.Stop(character)
-    end
+--------------------------------------------------
+-- RAGDOLL
+--------------------------------------------------
 
-    -- [NOVO] Para o som do emote junto, instantaneamente
-    local player = Players:GetPlayerFromCharacter(character)
-    if player then
-        StopPlayerEmoteSound(player)
-    end
+local function Ragdoll(character)
+
+	print("[Ragdoll] Iniciando pra", character.Name)
+
+	local player = Players:GetPlayerFromCharacter(character)
+
+	--------------------------------------------------
+	-- CLONE
+	--------------------------------------------------
+
+	character.Archivable = true
+
+	local corpse = character:Clone()
+
+	if not corpse then
+		warn(
+			"[Ragdoll] Clone falhou pra",
+			character.Name
+		)
+		return
+	end
+
+	corpse.Name = character.Name .. "_Corpse"
+	corpse.Parent = workspace
+
+	--------------------------------------------------
+	-- DESTRÓI PERSONAGEM ORIGINAL
+	--------------------------------------------------
+
+	character:Destroy()
+
+	--------------------------------------------------
+	-- RESPAWN
+	--------------------------------------------------
+
+	if player then
+		task.delay(RESPAWN_TIME, function()
+
+			if player.Parent then
+				player:LoadCharacter()
+			end
+
+		end)
+	end
+
+	--------------------------------------------------
+	-- REMOVE SCRIPTS
+	--------------------------------------------------
+
+	for _, obj in ipairs(corpse:GetDescendants()) do
+
+		if obj:IsA("Script")
+			or obj:IsA("LocalScript")
+			or obj:IsA("ModuleScript") then
+
+			obj:Destroy()
+
+		end
+
+	end
+
+	--------------------------------------------------
+	-- HUMANOID
+	--------------------------------------------------
+
+	local humanoid = corpse:FindFirstChildOfClass("Humanoid")
+
+	if humanoid then
+
+		humanoid.DisplayDistanceType =
+			Enum.HumanoidDisplayDistanceType.None
+
+		humanoid.BreakJointsOnDeath = false
+		humanoid.PlatformStand = true
+
+		humanoid.AutoRotate = false
+
+		humanoid.Health = 0
+
+	end
+
+	--------------------------------------------------
+	-- REMOVE HUMANOIDROOTPART
+	--------------------------------------------------
+
+	local root = corpse:FindFirstChild("HumanoidRootPart")
+
+	if root then
+		root:Destroy()
+	end
+
+	--------------------------------------------------
+	-- CONVERTE MOTOR6D EM BALL SOCKET
+	--------------------------------------------------
+
+	for _, joint in ipairs(corpse:GetDescendants()) do
+
+		if joint:IsA("Motor6D")
+			and joint.Part0
+			and joint.Part1 then
+
+			local part0 = joint.Part0
+			local part1 = joint.Part1
+
+			--------------------------------------------------
+			-- ATTACHMENT 0
+			--------------------------------------------------
+
+			local att0 = Instance.new("Attachment")
+			att0.Name = "RagdollAttachment0"
+			att0.CFrame = joint.C0
+			att0.Parent = part0
+
+			--------------------------------------------------
+			-- ATTACHMENT 1
+			--------------------------------------------------
+
+			local att1 = Instance.new("Attachment")
+			att1.Name = "RagdollAttachment1"
+			att1.CFrame = joint.C1
+			att1.Parent = part1
+
+			--------------------------------------------------
+			-- CONSTRAINT
+			--------------------------------------------------
+
+			local socket = Instance.new("BallSocketConstraint")
+
+			socket.Name = "RagdollConstraint"
+
+			socket.Attachment0 = att0
+			socket.Attachment1 = att1
+
+			-- Limites para impedir membros de girarem 360°
+			socket.LimitsEnabled = true
+			socket.UpperAngle = 60
+
+			socket.TwistLimitsEnabled = true
+			socket.TwistUpperAngle = 30
+			socket.TwistLowerAngle = -30
+
+			-- Ajuda a estabilidade da física
+			socket.MaxFrictionTorque = 100
+
+			socket.Restitution = 0
+
+			socket.Parent = joint.Parent
+
+			--------------------------------------------------
+			-- REMOVE MOTOR
+			--------------------------------------------------
+
+			joint:Destroy()
+
+		end
+
+	end
+
+	--------------------------------------------------
+	-- CONFIGURA FÍSICA
+	--------------------------------------------------
+
+	SetupCorpsePhysics(corpse)
+
+	--------------------------------------------------
+	-- NETWORK OWNER
+	--------------------------------------------------
+
+	pcall(function()
+
+		local rootLimb = GetRootLimb(corpse)
+
+		corpse.PrimaryPart = rootLimb
+
+		if rootLimb then
+			rootLimb:SetNetworkOwner(nil)
+		end
+
+	end)
+
+	print("[Ragdoll] Juntas convertidas")
+
+	--------------------------------------------------
+	-- IMPACTO INICIAL
+	--------------------------------------------------
+
+	local rootLimb = GetRootLimb(corpse)
+
+	if rootLimb then
+
+		rootLimb.AssemblyLinearVelocity = Vector3.new(
+			math.random(-4, 4),
+			12,
+			math.random(-4, 4)
+		)
+
+		rootLimb.AssemblyAngularVelocity = Vector3.new(
+			math.random(-10, 10),
+			math.random(-10, 10),
+			math.random(-10, 10)
+		)
+
+	end
+
+	--------------------------------------------------
+	-- ESPERA
+	--------------------------------------------------
+
+	task.wait(BODY_TIME)
+
+	if not corpse or not corpse.Parent then
+		return
+	end
+
+	--------------------------------------------------
+	-- FADE
+	--------------------------------------------------
+
+	local tweenInfo = TweenInfo.new(
+		FADE_TIME,
+		Enum.EasingStyle.Linear
+	)
+
+	for _, obj in ipairs(corpse:GetDescendants()) do
+
+		if obj:IsA("BasePart")
+			or obj:IsA("Decal")
+			or obj:IsA("Texture") then
+
+			TweenService:Create(
+				obj,
+				tweenInfo,
+				{Transparency = 1}
+			):Play()
+
+		end
+
+	end
+
+	--------------------------------------------------
+	-- REMOVE
+	--------------------------------------------------
+
+	task.wait(FADE_TIME)
+
+	if corpse and corpse.Parent then
+		corpse:Destroy()
+	end
+
 end
 
-local function SetupCharacter(character)
-    local humanoid = character:WaitForChild("Humanoid", 5)
-    if not humanoid then return end
+--------------------------------------------------
+-- PLAYER
+--------------------------------------------------
 
-    -- Andar (WASD / joystick): dispara com MoveDirection diferente de zero
-    humanoid.Running:Connect(function(speed)
-        if speed > 0 then
-            StopEmoteIfPlaying(character)
-        end
-    end)
+Players.PlayerAdded:Connect(function(player)
 
-    -- Pular
-    humanoid.StateChanged:Connect(function(_, newState)
-        if IsMovementState(newState) then
-            StopEmoteIfPlaying(character)
-        end
-    end)
-end
+	player.CharacterAdded:Connect(function(character)
 
-local function OnPlayerAdded(player)
-    player.CharacterAdded:Connect(SetupCharacter)
-    if player.Character then
-        SetupCharacter(player.Character)
-    end
-end
+		local humanoid =
+			character:WaitForChild("Humanoid")
 
-Players.PlayerRemoving:Connect(function(player)
-    StopPlayerEmoteSound(player) -- [NOVO] limpa se o jogador sair com emote tocando
-    activeEmoteSounds[player] = nil
+		humanoid.BreakJointsOnDeath = false
+
+		humanoid.Died:Connect(function()
+
+			print(
+				"[Ragdoll] Died disparou pra",
+				character.Name
+			)
+
+			task.spawn(
+				Ragdoll,
+				character
+			)
+
+		end)
+
+	end)
+
 end)
-
-Players.PlayerAdded:Connect(OnPlayerAdded)
-for _, player in ipairs(Players:GetPlayers()) do
-    OnPlayerAdded(player)
-end
