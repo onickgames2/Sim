@@ -10,6 +10,8 @@ local function GetRootLimb(corpse)
 end
 
 local function Ragdoll(character)
+	print("[Ragdoll] Iniciando pra", character.Name)
+
 	local corpse = character:Clone()
 	corpse.Name = character.Name.."_Corpse"
 	corpse.Parent = workspace
@@ -82,6 +84,8 @@ local function Ragdoll(character)
 		end
 	end)
 
+	print("[Ragdoll] Juntas convertidas, corpo deveria cair agora")
+
 	-- Pulinho de impacto
 	local rootLimb = GetRootLimb(corpse)
 	if rootLimb then
@@ -119,6 +123,7 @@ Players.PlayerAdded:Connect(function(player)
 		humanoid.BreakJointsOnDeath = false
 
 		humanoid.Died:Connect(function()
+			print("[Ragdoll] Died disparou pra", character.Name)
 			task.spawn(Ragdoll, character)
 		end)
 	end)
