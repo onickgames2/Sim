@@ -16,11 +16,12 @@ pcall(function()
 	PhysicsService:RegisterCollisionGroup(CORPSE_GROUP)
 end)
 
--- Cadáveres continuam colidindo com o mapa e entre si.
+-- Cadáveres NÃO colidem com eles mesmos (evita que o ragdoll trema ou voe).
+-- Nota: Isso também faz com que um cadáver não bata em outro cadáver.
 PhysicsService:CollisionGroupSetCollidable(
 	CORPSE_GROUP,
 	CORPSE_GROUP,
-	true
+	false
 )
 
 -- Mantém colisão com o grupo padrão.
@@ -45,13 +46,9 @@ end
 
 local function SetupCorpsePhysics(corpse)
 
-	local bodyParts = {}
-
 	for _, part in ipairs(corpse:GetDescendants()) do
 
 		if part:IsA("BasePart") then
-			
-			table.insert(bodyParts, part)
 
 			part.Anchored = false
 
@@ -94,20 +91,6 @@ local function SetupCorpsePhysics(corpse)
 
 		end
 
-	end
-
-	--------------------------------------------------
-	-- IGNORA COLISÃO INTERNA (SELF-COLLISION)
-	--------------------------------------------------
-
-	for i = 1, #bodyParts do
-		for j = i + 1, #bodyParts do
-			local noCol = Instance.new("NoCollisionConstraint")
-			noCol.Name = "RagdollSelfCollisionIgnore"
-			noCol.Part0 = bodyParts[i]
-			noCol.Part1 = bodyParts[j]
-			noCol.Parent = corpse
-		end
 	end
 
 end
