@@ -12,7 +12,15 @@ end
 local function Ragdoll(character)
 	print("[Ragdoll] Iniciando pra", character.Name)
 
+	-- Alguns kits desativam Archivable por segurança, o que faz Clone() retornar nil
+	character.Archivable = true
+
 	local corpse = character:Clone()
+	if not corpse then
+		warn("[Ragdoll] Clone falhou pra", character.Name, "- Archivable ainda false em algum descendente?")
+		return
+	end
+
 	corpse.Name = character.Name.."_Corpse"
 	corpse.Parent = workspace
 
