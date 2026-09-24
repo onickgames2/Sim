@@ -14,6 +14,11 @@ local function Ragdoll(character)
 	corpse.Name = character.Name.."_Corpse"
 	corpse.Parent = workspace
 
+	-- Destrói o personagem original: sem isso, ele continua no workspace do jeito
+	-- que morreu (parado, sem cair) e fica sobreposto ao corpse, dando a impressão
+	-- de que o corpo "morre todo duro"
+	character:Destroy()
+
 	-- Remove scripts
 	for _, v in ipairs(corpse:GetDescendants()) do
 		if v:IsA("Script") or v:IsA("LocalScript") then
