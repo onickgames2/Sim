@@ -3,6 +3,7 @@ local TweenService = game:GetService("TweenService")
 
 local BODY_TIME = 15
 local FADE_TIME = 3
+local RESPAWN_TIME = 5 -- igual ao padrão do Roblox
 
 -- Retorna a parte central do corpo, seja R6 (Torso) ou R15 (UpperTorso)
 local function GetRootLimb(corpse)
@@ -11,6 +12,9 @@ end
 
 local function Ragdoll(character)
 	print("[Ragdoll] Iniciando pra", character.Name)
+
+	-- Pega o Player antes de mexer no character, pra poder respawnar depois
+	local player = Players:GetPlayerFromCharacter(character)
 
 	-- Alguns kits desativam Archivable por segurança, o que faz Clone() retornar nil
 	character.Archivable = true
@@ -28,6 +32,15 @@ local function Ragdoll(character)
 	-- que morreu (parado, sem cair) e fica sobreposto ao corpse, dando a impressão
 	-- de que o corpo "morre todo duro"
 	character:Destroy()
+
+	-- Respawn imediato (não depende do tempo que o corpo fica caído/sumindo)
+	if player then
+		task.delay(RESPAWN_TIME, function()
+			if player.Parent then
+				player:LoadCharacter()
+			end
+		end)
+	end
 
 	-- Remove scripts
 	for _, v in ipairs(corpse:GetDescendants()) do
