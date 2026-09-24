@@ -17,14 +17,13 @@ pcall(function()
 end)
 
 -- Cadáveres NÃO colidem com eles mesmos (evita que o ragdoll trema ou voe).
--- Nota: Isso também faz com que um cadáver não bata em outro cadáver.
 PhysicsService:CollisionGroupSetCollidable(
 	CORPSE_GROUP,
 	CORPSE_GROUP,
 	false
 )
 
--- Mantém colisão com o grupo padrão.
+-- Mantém colisão com o grupo padrão do mapa.
 PhysicsService:CollisionGroupSetCollidable(
 	CORPSE_GROUP,
 	"Default",
@@ -61,6 +60,17 @@ local function SetupCorpsePhysics(corpse)
 			part.CanQuery = true
 
 			part.CollisionGroup = CORPSE_GROUP
+			
+			--------------------------------------------------
+			-- FORÇA A COLISÃO DOS MEMBROS COM O MAPA
+			-- O Humanoid tenta mudar o CanCollide dos braços 
+			-- e pernas pra false. Isso impede que ele consiga.
+			--------------------------------------------------
+			part:GetPropertyChangedSignal("CanCollide"):Connect(function()
+				if not part.CanCollide then
+					part.CanCollide = true
+				end
+			end)
 
 			--------------------------------------------------
 			-- FÍSICA
@@ -190,6 +200,9 @@ local function Ragdoll(character)
 		hum.AutoRotate = false
 
 		hum.Health = 0
+		
+		-- Garante que o Humanoid entre no estado de física
+		hum:ChangeState(Enum.HumanoidStateType.Physics)
 
 	end
 
