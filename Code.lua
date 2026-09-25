@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local PhysicsService = game:GetService("PhysicsService")
+local RunService = game:GetService("RunService")
 
 local BODY_TIME = 15
 local FADE_TIME = 3
@@ -23,7 +24,7 @@ PhysicsService:CollisionGroupSetCollidable(
 	false
 )
 
--- Mantém colisão com o grupo padrão do mapa.
+-- Mantém colisão com o grupo padrão (chão, paredes, outros players).
 PhysicsService:CollisionGroupSetCollidable(
 	CORPSE_GROUP,
 	"Default",
@@ -40,6 +41,35 @@ local function GetRootLimb(corpse)
 end
 
 --------------------------------------------------
+-- FORÇA COLISÃO EM TODAS AS PARTES
+-- (braços, pernas, cabeça, tronco — tudo)
+--------------------------------------------------
+
+local function ForceCollisionOnAll(corpse)
+
+	for _, part in ipairs(corpse:GetDescendants()) do
+
+		if part:IsA("BasePart") then
+
+			part.CanCollide = true
+			part.CanTouch = true
+			part.CanQuery = true
+
+			part.CollisionGroup = CORPSE_GROUP
+
+			-- Default = caixa simples, sempre gera colisão sólida.
+			-- (PreciseConvexDecomposition pode falhar silenciosamente
+			-- em algumas partes tipo Head/mãos/pés e deixá-las "fantasma")
+			part.CollisionFidelity =
+				Enum.CollisionFidelity.Default
+
+		end
+
+	end
+
+end
+
+--------------------------------------------------
 -- CONFIGURA FÍSICA DO CADÁVER
 --------------------------------------------------
 
@@ -50,32 +80,6 @@ local function SetupCorpsePhysics(corpse)
 		if part:IsA("BasePart") then
 
 			part.Anchored = false
-
-			--------------------------------------------------
-			-- COLISÃO
-			--------------------------------------------------
-
-			part.CanCollide = true
-			part.CanTouch = true
-			part.CanQuery = true
-
-			part.CollisionGroup = CORPSE_GROUP
-			
-			--------------------------------------------------
-			-- FORÇA A COLISÃO DOS MEMBROS COM O MAPA
-			-- O Humanoid tenta mudar o CanCollide dos braços 
-			-- e pernas pra false. Isso impede que ele consiga.
-			--------------------------------------------------
-			part:GetPropertyChangedSignal("CanCollide"):Connect(function()
-				if not part.CanCollide then
-					part.CanCollide = true
-				end
-			end)
-
-			--------------------------------------------------
-			-- FÍSICA
-			--------------------------------------------------
-
 			part.Massless = false
 
 			part.CustomPhysicalProperties =
@@ -87,21 +91,11 @@ local function SetupCorpsePhysics(corpse)
 					100  -- ElasticityWeight
 				)
 
-			--------------------------------------------------
-			-- TENTA ATIVAR CCD
-			--
-			-- Algumas versões/API do Roblox podem não possuir
-			-- esta propriedade. Por isso usamos pcall.
-			--------------------------------------------------
-
-			pcall(function()
-				part.CollisionFidelity =
-					Enum.CollisionFidelity.PreciseConvexDecomposition
-			end)
-
 		end
 
 	end
+
+	ForceCollisionOnAll(corpse)
 
 end
 
@@ -200,9 +194,6 @@ local function Ragdoll(character)
 		hum.AutoRotate = false
 
 		hum.Health = 0
-		
-		-- Garante que o Humanoid entre no estado de física
-		hum:ChangeState(Enum.HumanoidStateType.Physics)
 
 	end
 
@@ -310,7 +301,7 @@ local function Ragdoll(character)
 	end
 
 	--------------------------------------------------
-	-- CONFIGURA TODAS AS PARTES
+	-- CONFIGURA TODAS AS PARTES (física + colisão)
 	--------------------------------------------------
 
 	SetupCorpsePhysics(corpse)
@@ -338,24 +329,16 @@ local function Ragdoll(character)
 	end)
 
 	--------------------------------------------------
-	-- GARANTE NOVAMENTE A COLISÃO
+	-- REFORÇO DE COLISÃO (1 frame depois)
+	--
+	-- Garante que braços, pernas e cabeça não percam
+	-- a colisão por causa de replicação/streaming.
 	--------------------------------------------------
 
-	for _, part in ipairs(corpse:GetDescendants()) do
+	RunService.Heartbeat:Wait()
 
-		if part:IsA("BasePart") then
-
-			part.CanCollide = true
-			part.CanTouch = true
-			part.CanQuery = true
-
-			part.CollisionGroup =
-				CORPSE_GROUP
-
-			part.Anchored = false
-
-		end
-
+	if corpse and corpse.Parent then
+		ForceCollisionOnAll(corpse)
 	end
 
 	print(
