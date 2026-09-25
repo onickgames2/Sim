@@ -58,10 +58,13 @@ local function ForceCollisionOnAll(corpse)
 			part.CollisionGroup = CORPSE_GROUP
 
 			-- Default = caixa simples, sempre gera colisão sólida.
-			-- (PreciseConvexDecomposition pode falhar silenciosamente
-			-- em algumas partes tipo Head/mãos/pés e deixá-las "fantasma")
-			part.CollisionFidelity =
-				Enum.CollisionFidelity.Default
+			-- CollisionFidelity só existe em MeshPart (no R6 o Head,
+			-- Torso, Arms e Legs são Part comum), por isso o pcall —
+			-- sem ele um erro aqui travava o loop inteiro no meio.
+			pcall(function()
+				part.CollisionFidelity =
+					Enum.CollisionFidelity.Default
+			end)
 
 		end
 
