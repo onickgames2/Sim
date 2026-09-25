@@ -153,21 +153,18 @@ end
 
 -- Detecta clique/toque no Skip
 local function setupSkipInput()
-    skip.InputBegan:Connect(function(input)
+    skip.MouseButton1Click:Connect(function()
         if skipClicked then return end
         
-        if input.UserInputType == Enum.UserInputType.MouseButton1 
-        or input.UserInputType == Enum.UserInputType.Touch then
-            skipClicked = true
-            lbl.Text = "Skipping..."
-            
-            task.spawn(function()
-                task.wait(2)
-                lbl.Text = "Loading Complete!"
-                task.wait(1)
-                finishSequence()
-            end)
-        end
+        skipClicked = true
+        lbl.Text = "Skipping..."
+        
+        task.spawn(function()
+            task.wait(2)
+            lbl.Text = "Loading Complete!"
+            task.wait(1)
+            finishSequence()
+        end)
     end)
 end
 
