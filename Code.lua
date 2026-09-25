@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local PhysicsService = game:GetService("PhysicsService")
-local RunService = game:GetService("RunService")
 
 local BODY_TIME = 15
 local FADE_TIME = 3
@@ -35,119 +34,51 @@ PhysicsService:CollisionGroupSetCollidable(
 -- RETORNA A PARTE CENTRAL DO CORPO
 --------------------------------------------------
 
-local function GetRootLimb(corpse)
-	return corpse:FindFirstChild("UpperTorso")
-		or corpse:FindFirstChild("Torso")
-end
-
---------------------------------------------------
--- FORÇA COLISÃO EM TODAS AS PARTES
--- (braços, pernas, cabeça, tronco — tudo)
---------------------------------------------------
-
-local function ForceCollisionOnAll(corpse)
-
-	for _, part in ipairs(corpse:GetDescendants()) do
-
-		if part:IsA("BasePart") then
-
-			part.CanCollide = true
-			part.CanTouch = true
-			part.CanQuery = true
-
-			part.CollisionGroup = CORPSE_GROUP
-
-			-- Default = caixa simples, sempre gera colisão sólida.
-			-- CollisionFidelity só existe em MeshPart (no R6 o Head,
-			-- Torso, Arms e Legs são Part comum), por isso o pcall —
-			-- sem ele um erro aqui travava o loop inteiro no meio.
-			pcall(function()
-				part.CollisionFidelity =
-					Enum.CollisionFidelity.Default
-			end)
-
-		end
-
-	end
-
-end
-
---------------------------------------------------
--- CONFIGURA FÍSICA DO CADÁVER
---------------------------------------------------
-
-local function SetupCorpsePhysics(corpse)
-
-	for _, part in ipairs(corpse:GetDescendants()) do
-
-		if part:IsA("BasePart") then
-
-			part.Anchored = false
-			part.Massless = false
-
-			part.CustomPhysicalProperties =
-				PhysicalProperties.new(
-					0.7, -- Density
-					0.6, -- Friction
-					0,   -- Elasticity
-					100, -- FrictionWeight
-					100  -- ElasticityWeight
-				)
-
-		end
-
-	end
-
-	ForceCollisionOnAll(corpse)
-
+local function GetRootLimb(character)
+	return character:FindFirstChild("UpperTorso")
+		or character:FindFirstChild("Torso")
+		or character:FindFirstChild("HumanoidRootPart")
 end
 
 --------------------------------------------------
 -- RAGDOLL
+--
+-- IMPORTANTE: ragdolla o character ORIGINAL, sem
+-- clonar/destruir. Cloná-lo criava um modelo que não
+-- pertence a nenhum Player, e o Roblox não conseguia
+-- atribuir a "posse" (network owner) de cada parte de
+-- forma confiável — por isso braços e pernas atravessavam
+-- o chão mesmo com CanCollide = true e SetNetworkOwner(nil)
+-- setados manualmente.
 --------------------------------------------------
 
 local function Ragdoll(character)
 
 	print("[Ragdoll] Iniciando pra", character.Name)
 
-	--------------------------------------------------
-	-- PLAYER
-	--------------------------------------------------
-
 	local player =
 		Players:GetPlayerFromCharacter(character)
 
 	--------------------------------------------------
-	-- CLONE
+	-- MARCA COMO CADÁVER
+	-- (pra não rodar isso 2x se Died disparar de novo)
 	--------------------------------------------------
 
-	character.Archivable = true
-
-	local corpse = character:Clone()
-
-	if not corpse then
-
-		warn(
-			"[Ragdoll] Clone falhou pra",
-			character.Name
-		)
-
+	if character:GetAttribute("IsRagdolled") then
 		return
 	end
 
-	corpse.Name =
+	character:SetAttribute("IsRagdolled", true)
+
+	character.Name =
 		character.Name .. "_Corpse"
-
-	corpse.Parent = workspace
-
-	--------------------------------------------------
-	-- REMOVE PERSONAGEM ORIGINAL
-	--------------------------------------------------
-
-	character:Destroy()
 
 	--------------------------------------------------
 	-- RESPAWN
+	--
+	-- O personagem antigo continua existindo no
+	-- Workspace (como cadáver); o Player só recebe
+	-- um character NOVO depois do delay.
 	--------------------------------------------------
 
 	if player then
@@ -164,15 +95,17 @@ local function Ragdoll(character)
 
 	--------------------------------------------------
 	-- REMOVE SCRIPTS
+	-- (ex: Animate, pra não brigar com a física do ragdoll)
 	--------------------------------------------------
 
-	for _, v in ipairs(corpse:GetDescendants()) do
+	for _, v in ipairs(character:GetDescendants()) do
 
-		if v:IsA("Script")
-			or v:IsA("LocalScript")
-			or v:IsA("ModuleScript") then
+		if v:IsA("LocalScript")
+			or v:IsA("Script") then
 
-			v:Destroy()
+			if v.Name ~= "DeathHandler" then
+				v:Destroy()
+			end
 
 		end
 
@@ -183,7 +116,7 @@ local function Ragdoll(character)
 	--------------------------------------------------
 
 	local hum =
-		corpse:FindFirstChildOfClass("Humanoid")
+		character:FindFirstChildOfClass("Humanoid")
 
 	if hum then
 
@@ -196,26 +129,13 @@ local function Ragdoll(character)
 
 		hum.AutoRotate = false
 
-		hum.Health = 0
-
-	end
-
-	--------------------------------------------------
-	-- REMOVE ROOT
-	--------------------------------------------------
-
-	local root =
-		corpse:FindFirstChild("HumanoidRootPart")
-
-	if root then
-		root:Destroy()
 	end
 
 	--------------------------------------------------
 	-- MOTOR6D -> BALL SOCKET
 	--------------------------------------------------
 
-	for _, joint in ipairs(corpse:GetDescendants()) do
+	for _, joint in ipairs(character:GetDescendants()) do
 
 		if joint:IsA("Motor6D")
 			and joint.Part0
@@ -224,57 +144,20 @@ local function Ragdoll(character)
 			local part0 = joint.Part0
 			local part1 = joint.Part1
 
-			--------------------------------------------------
-			-- ATTACHMENT 0
-			--------------------------------------------------
+			local att0 = Instance.new("Attachment")
+			att0.Name = "RagdollAttachment0"
+			att0.CFrame = joint.C0
+			att0.Parent = part0
 
-			local att0 =
-				Instance.new("Attachment")
+			local att1 = Instance.new("Attachment")
+			att1.Name = "RagdollAttachment1"
+			att1.CFrame = joint.C1
+			att1.Parent = part1
 
-			att0.Name =
-				"RagdollAttachment0"
-
-			att0.CFrame =
-				joint.C0
-
-			att0.Parent =
-				part0
-
-			--------------------------------------------------
-			-- ATTACHMENT 1
-			--------------------------------------------------
-
-			local att1 =
-				Instance.new("Attachment")
-
-			att1.Name =
-				"RagdollAttachment1"
-
-			att1.CFrame =
-				joint.C1
-
-			att1.Parent =
-				part1
-
-			--------------------------------------------------
-			-- BALL SOCKET
-			--------------------------------------------------
-
-			local socket =
-				Instance.new("BallSocketConstraint")
-
-			socket.Name =
-				"RagdollConstraint"
-
-			socket.Attachment0 =
-				att0
-
-			socket.Attachment1 =
-				att1
-
-			--------------------------------------------------
-			-- LIMITES
-			--------------------------------------------------
+			local socket = Instance.new("BallSocketConstraint")
+			socket.Name = "RagdollConstraint"
+			socket.Attachment0 = att0
+			socket.Attachment1 = att1
 
 			socket.LimitsEnabled = true
 			socket.UpperAngle = 60
@@ -283,19 +166,10 @@ local function Ragdoll(character)
 			socket.TwistUpperAngle = 30
 			socket.TwistLowerAngle = -30
 
-			--------------------------------------------------
-			-- ESTABILIDADE
-			--------------------------------------------------
-
 			socket.MaxFrictionTorque = 100
 			socket.Restitution = 0
 
-			socket.Parent =
-				joint.Parent
-
-			--------------------------------------------------
-			-- REMOVE MOTOR
-			--------------------------------------------------
+			socket.Parent = joint.Parent
 
 			joint:Destroy()
 
@@ -304,37 +178,48 @@ local function Ragdoll(character)
 	end
 
 	--------------------------------------------------
-	-- CONFIGURA TODAS AS PARTES (física + colisão)
+	-- FÍSICA + COLISÃO EM TODAS AS PARTES
 	--------------------------------------------------
 
-	SetupCorpsePhysics(corpse)
+	for _, part in ipairs(character:GetDescendants()) do
+
+		if part:IsA("BasePart") then
+
+			part.Anchored = false
+			part.Massless = false
+			part.CanCollide = true
+			part.CanTouch = true
+			part.CanQuery = true
+			part.CollisionGroup = CORPSE_GROUP
+
+			part.CustomPhysicalProperties =
+				PhysicalProperties.new(
+					0.7, -- Density
+					0.6, -- Friction
+					0,   -- Elasticity
+					100, -- FrictionWeight
+					100  -- ElasticityWeight
+				)
+
+		end
+
+	end
 
 	--------------------------------------------------
 	-- NETWORK OWNERSHIP
 	--
-	-- Como as partes agora estão ligadas por
-	-- BallSocketConstraint (não Motor6D/Weld rígido),
-	-- o Roblox pode atribuir um "dono" AUTOMÁTICO
-	-- diferente pra cada parte (geralmente um client).
-	-- Isso faz braços/pernas simularem fisicamente
-	-- fora do servidor e atravessarem o chão.
-	--
-	-- Por isso forçamos o servidor (nil) como dono
-	-- de TODAS as partes, não só do torso.
+	-- Trava no servidor pra garantir física consistente
+	-- (o character ainda pertence ao Player aqui, então
+	-- isso agora "gruda" de verdade).
 	--------------------------------------------------
 
-	pcall(function()
+	local rootLimb = GetRootLimb(character)
 
-		local rootLimb =
-			GetRootLimb(corpse)
+	if rootLimb then
+		character.PrimaryPart = rootLimb
+	end
 
-		if rootLimb then
-			corpse.PrimaryPart = rootLimb
-		end
-
-	end)
-
-	for _, part in ipairs(corpse:GetDescendants()) do
+	for _, part in ipairs(character:GetDescendants()) do
 
 		if part:IsA("BasePart") then
 
@@ -346,19 +231,6 @@ local function Ragdoll(character)
 
 	end
 
-	--------------------------------------------------
-	-- REFORÇO DE COLISÃO (1 frame depois)
-	--
-	-- Garante que braços, pernas e cabeça não percam
-	-- a colisão por causa de replicação/streaming.
-	--------------------------------------------------
-
-	RunService.Heartbeat:Wait()
-
-	if corpse and corpse.Parent then
-		ForceCollisionOnAll(corpse)
-	end
-
 	print(
 		"[Ragdoll] Física configurada para",
 		character.Name
@@ -367,9 +239,6 @@ local function Ragdoll(character)
 	--------------------------------------------------
 	-- IMPACTO INICIAL
 	--------------------------------------------------
-
-	local rootLimb =
-		GetRootLimb(corpse)
 
 	if rootLimb then
 
@@ -395,11 +264,8 @@ local function Ragdoll(character)
 
 	task.wait(BODY_TIME)
 
-	if not corpse
-		or not corpse.Parent then
-
+	if not character.Parent then
 		return
-
 	end
 
 	--------------------------------------------------
@@ -412,7 +278,7 @@ local function Ragdoll(character)
 			Enum.EasingStyle.Linear
 		)
 
-	for _, obj in ipairs(corpse:GetDescendants()) do
+	for _, obj in ipairs(character:GetDescendants()) do
 
 		if obj:IsA("BasePart")
 			or obj:IsA("Decal")
@@ -421,9 +287,7 @@ local function Ragdoll(character)
 			TweenService:Create(
 				obj,
 				tweenInfo,
-				{
-					Transparency = 1
-				}
+				{ Transparency = 1 }
 			):Play()
 
 		end
@@ -436,11 +300,8 @@ local function Ragdoll(character)
 
 	task.wait(FADE_TIME)
 
-	if corpse
-		and corpse.Parent then
-
-		corpse:Destroy()
-
+	if character.Parent then
+		character:Destroy()
 	end
 
 end
