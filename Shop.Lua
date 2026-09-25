@@ -1,7 +1,8 @@
 --// SERVICES
-local Players           = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService      = game:GetService("TweenService")
+local Players            = game:GetService("Players")
+local ReplicatedStorage  = game:GetService("ReplicatedStorage")
+local TweenService       = game:GetService("TweenService")
+local MarketplaceService = game:GetService("MarketplaceService") -- [NOVO]
 
 --// PLAYER
 local player     = Players.LocalPlayer
@@ -46,6 +47,14 @@ local invSurvBtn    = invFrame.Survivors
 -- [NOVO] Botão e frame de compra de Robux
 local robuxBtn   = ui.RobuxButton
 local robuxFrame = ui.RobuxFrame
+
+-- [NOVO] Os dois botões de gamepass dentro do RobuxFrame
+local robuxPass1Btn = robuxFrame.ImageButton
+local robuxPass2Btn = robuxFrame.ImageButton2
+
+-- [NOVO] Troque pelos IDs reais dos seus gamepasses
+local ROBUX_GAMEPASS_1_ID = 0000000
+local ROBUX_GAMEPASS_2_ID = 0000000
 
 -------------------------------------------------
 -- [PATCH] CAUSA RAIZ: DescFrame tinha o mesmo ZIndex do DetailsFrame,
@@ -286,6 +295,7 @@ for _, btn in ipairs({
 	invDetails.Desc,   invDetails.Equip, invDetails.Skins,
 	buySkinFrame.Buy,  buySkinFrame.Cancel,
 	confirmFrame.Confirm, confirmFrame.Cancel,
+	robuxPass1Btn, robuxPass2Btn, -- [NOVO]
 	}) do
 	applyEffects(btn)
 end
@@ -945,6 +955,15 @@ robuxBtn.MouseButton1Click:Connect(function()
 		setToggleActive(robuxBtn, false)
 		frameClose(robuxFrame)
 	end
+end)
+
+-- [NOVO] Cada ImageButton abre a tela de compra de um gamepass diferente
+robuxPass1Btn.MouseButton1Click:Connect(function()
+	MarketplaceService:PromptGamePassPurchase(player, ROBUX_GAMEPASS_1_ID)
+end)
+
+robuxPass2Btn.MouseButton1Click:Connect(function()
+	MarketplaceService:PromptGamePassPurchase(player, ROBUX_GAMEPASS_2_ID)
 end)
 
 -------------------------------------------------
