@@ -5,7 +5,6 @@ local frame = gui.Frame
 local skip = gui.Frame.Skip -- ajuste o caminho se necessário
 
 local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
 
 -- folders
 local rp = game.ReplicatedStorage
@@ -53,11 +52,12 @@ gui.Enabled = true
 
 -- Estado inicial do Skip (invisível até o fade in)
 skip.TextTransparency = 1
-if skip:FindFirstAncestorOfClass("Frame") or skip:IsA("TextButton") then
+if skip:IsA("TextButton") then
     skip.BackgroundTransparency = 1
 end
 
 local skipClicked = false
+local finished = false
 
 -- Função que define a imagem aleatória uma única vez
 local function setInitialRandomImage()
@@ -123,6 +123,15 @@ local function fadeOutUI()
     task.wait(fadeTime)
 end
 
+-- Garante que a finalização só rode uma vez
+local function finishSequence()
+    if finished then return end
+    finished = true
+    
+    fadeOutUI()
+    gui.Enabled = false
+end
+
 -- Fade in do Skip depois de 6 segundos
 local function startSkipTimer()
     task.wait(6)
@@ -151,6 +160,13 @@ local function setupSkipInput()
         or input.UserInputType == Enum.UserInputType.Touch then
             skipClicked = true
             lbl.Text = "Skipping..."
+            
+            task.spawn(function()
+                task.wait(2)
+                lbl.Text = "Loading Complete!"
+                task.wait(1)
+                finishSequence()
+            end)
         end
     end)
 end
@@ -172,9 +188,8 @@ local function loadingSequence()
             local totalChildren = #children
             
             for childIndex, child in ipairs(children) do
-                if not skipClicked then
-                    lbl.Text = text .. ": " .. childIndex .. "/" .. totalChildren
-                end
+                if skipClicked then break end
+                lbl.Text = text .. ": " .. childIndex .. "/" .. totalChildren
                 task.wait(getRandomDelay())
             end
         end
@@ -184,13 +199,15 @@ local function loadingSequence()
         end
     end
     
-    if not skipClicked then
-        lbl.Text = "Loading Complete!"
-        task.wait(1)
+    -- Se o Skip foi clicado, a própria função dele cuida da finalização
+    if skipClicked then
+        return
     end
     
-    fadeOutUI()
-    gui.Enabled = false
+    lbl.Text = "Loading Complete!"
+    task.wait(1)
+    
+    finishSequence()
 end
 
 -- Iniciar sequência de loading
