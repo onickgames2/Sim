@@ -50,7 +50,8 @@ local loadingImages = {
 
 gui.Enabled = true
 
--- Remove o background do Skip permanentemente (não depende de tween)
+-- Garante visibilidade + remove fundo + começa transparente
+skip.Visible = true
 skip.BackgroundTransparency = 1
 skip.AutoButtonColor = false
 skip.TextTransparency = 1
@@ -79,7 +80,6 @@ local function fadeObject(object, tweenInfo)
 
 	if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
 		goals.TextTransparency = 1
-		-- Não mexe no BackgroundTransparency do Skip (já é 1 fixo)
 		if object ~= skip then
 			goals.BackgroundTransparency = 1
 		end
@@ -132,7 +132,7 @@ local function finishSequence()
 	gui.Enabled = false
 end
 
--- Fade in do Skip depois de 6 segundos (só o texto, o fundo já é transparente)
+-- Fade in do Skip depois de 6 segundos
 local function startSkipTimer()
 	task.wait(6)
 
@@ -150,9 +150,10 @@ local function startSkipTimer()
 	tween:Play()
 end
 
--- Detecta clique/toque no Skip
+-- Detecta clique/toque/gamepad no Skip
 local function setupSkipInput()
-	skip.MouseButton1Click:Connect(function()
+	skip.Activated:Connect(function()
+		print("[Skip] clicado") -- pode remover depois de confirmar que funciona
 		if skipClicked then return end
 
 		skipClicked = true
@@ -174,7 +175,6 @@ local function loadingSequence()
 	task.spawn(startSkipTimer)
 	setupSkipInput()
 
-	-- Calcula o total de itens de todas as pastas pra porcentagem geral
 	local totalItemsAll = 0
 	local folderCounts = {}
 	for _, folderKey in ipairs(indexSort) do
