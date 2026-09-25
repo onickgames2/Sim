@@ -50,10 +50,10 @@ local loadingImages = {
 
 gui.Enabled = true
 
--- Estado inicial do Skip (invisível até o fade in)
-skip.TextTransparency = 1
+-- Remove o background do Skip permanentemente (não depende de tween)
 skip.BackgroundTransparency = 1
-skip.Active = false -- não clicável enquanto invisível
+skip.AutoButtonColor = false
+skip.TextTransparency = 1
 
 local skipClicked = false
 local finished = false
@@ -79,7 +79,10 @@ local function fadeObject(object, tweenInfo)
 
 	if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
 		goals.TextTransparency = 1
-		goals.BackgroundTransparency = 1
+		-- Não mexe no BackgroundTransparency do Skip (já é 1 fixo)
+		if object ~= skip then
+			goals.BackgroundTransparency = 1
+		end
 	end
 
 	if object:IsA("ImageLabel") or object:IsA("ImageButton") then
@@ -111,10 +114,8 @@ local function fadeOutUI()
 		Enum.EasingDirection.Out
 	)
 
-	-- Faz fade no Frame principal
 	fadeObject(frame, tweenInfo)
 
-	-- Faz fade em todos os descendentes
 	for _, obj in ipairs(frame:GetDescendants()) do
 		fadeObject(obj, tweenInfo)
 	end
@@ -131,13 +132,11 @@ local function finishSequence()
 	gui.Enabled = false
 end
 
--- Fade in do Skip depois de 6 segundos
+-- Fade in do Skip depois de 6 segundos (só o texto, o fundo já é transparente)
 local function startSkipTimer()
 	task.wait(6)
 
 	if skipClicked then return end
-
-	skip.Active = true
 
 	local fadeInInfo = TweenInfo.new(
 		0.5,
@@ -146,8 +145,7 @@ local function startSkipTimer()
 	)
 
 	local tween = TweenService:Create(skip, fadeInInfo, {
-		TextTransparency = 0,
-		BackgroundTransparency = 0
+		TextTransparency = 0
 	})
 	tween:Play()
 end
@@ -158,7 +156,6 @@ local function setupSkipInput()
 		if skipClicked then return end
 
 		skipClicked = true
-		skip.Active = false
 		lbl.Text = "Skipping..."
 
 		task.spawn(function()
@@ -172,12 +169,22 @@ end
 
 -- Função principal de loading
 local function loadingSequence()
-	-- Define a imagem assim que o loading começa
 	setInitialRandomImage()
 
-	-- Inicia o timer do Skip e o listener de input em paralelo
 	task.spawn(startSkipTimer)
 	setupSkipInput()
+
+	-- Calcula o total de itens de todas as pastas pra porcentagem geral
+	local totalItemsAll = 0
+	local folderCounts = {}
+	for _, folderKey in ipairs(indexSort) do
+		local folder = folders[folderKey]
+		local count = folder and #folder:GetChildren() or 0
+		folderCounts[folderKey] = count
+		totalItemsAll += count
+	end
+
+	local processedItems = 0
 
 	for _, folderKey in ipairs(indexSort) do
 		if skipClicked then break end
@@ -186,17 +193,19 @@ local function loadingSequence()
 			local folder = folders[folderKey]
 			local children = folder:GetChildren()
 			local text = indexText[folderKey] or folderKey
-			local totalChildren = #children
 
-			for childIndex, child in ipairs(children) do
+			for _, child in ipairs(children) do
 				if skipClicked then break end
-				lbl.Text = text .. ": " .. childIndex .. "/" .. totalChildren
+
+				processedItems += 1
+				local percent = totalItemsAll > 0 and math.floor((processedItems / totalItemsAll) * 100) or 100
+				lbl.Text = text .. ": " .. percent .. "%"
+
 				task.wait(getRandomDelay())
 			end
 		end
 	end
 
-	-- Se o Skip foi clicado, a própria função dele cuida da finalização
 	if skipClicked then
 		return
 	end
