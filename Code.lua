@@ -309,7 +309,15 @@ local function Ragdoll(character)
 	--------------------------------------------------
 	-- NETWORK OWNERSHIP
 	--
-	-- Servidor controla a física do cadáver.
+	-- Como as partes agora estão ligadas por
+	-- BallSocketConstraint (não Motor6D/Weld rígido),
+	-- o Roblox pode atribuir um "dono" AUTOMÁTICO
+	-- diferente pra cada parte (geralmente um client).
+	-- Isso faz braços/pernas simularem fisicamente
+	-- fora do servidor e atravessarem o chão.
+	--
+	-- Por isso forçamos o servidor (nil) como dono
+	-- de TODAS as partes, não só do torso.
 	--------------------------------------------------
 
 	pcall(function()
@@ -318,15 +326,22 @@ local function Ragdoll(character)
 			GetRootLimb(corpse)
 
 		if rootLimb then
-
-			corpse.PrimaryPart =
-				rootLimb
-
-			rootLimb:SetNetworkOwner(nil)
-
+			corpse.PrimaryPart = rootLimb
 		end
 
 	end)
+
+	for _, part in ipairs(corpse:GetDescendants()) do
+
+		if part:IsA("BasePart") then
+
+			pcall(function()
+				part:SetNetworkOwner(nil)
+			end)
+
+		end
+
+	end
 
 	--------------------------------------------------
 	-- REFORÇO DE COLISÃO (1 frame depois)
