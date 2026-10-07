@@ -19,7 +19,7 @@ local TWEEN_HOVER = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirect
 local TWEEN_CLICK = TweenInfo.new(0.1,  Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local function invertColor(c)
-	return Color3.new(1 - c.R, 1 - c.G, 1 - c.B)
+	return Color3.new(1 - c.r, 1 - c.g, 1 - c.b)
 end
 
 local function applyEffects(btn)
@@ -73,7 +73,7 @@ local function applyEffects(btn)
 		TweenService:Create(btn, TWEEN_HOVER, { Size = origSize }):Play()
 		if have then
 			TweenService:Create(btn.Info, infoTI, out):Play()
-			task.delay(0.1, function()
+			delay(0.1, function()
 				btn.Info.Visible = false
 			end)
 		end
@@ -114,7 +114,7 @@ local function makeToggle(name, labelPrefix, desc, onChange)
 		if onChange then onChange(new) end
 	end)
 
-	-- Monitora mudanças vindas do servidor
+	-- Monitora mudancas vindas do servidor
 	local pdata = player:FindFirstChild("PlayerData")
 	if pdata then
 		local config = pdata:WaitForChild("Config", 5)
@@ -158,21 +158,21 @@ end)
 -- WORLD LISTENERS
 --------------------------------------------------
 
--- Gerencia transparência das hitboxes ao serem criadas
+-- Gerencia transparencia das hitboxes ao serem criadas
 workspace:WaitForChild("Hitboxes").ChildAdded:Connect(function(box)
-	-- Lógica de ShowBoxes
+	-- Logica de ShowBoxes
 	if getConfigValue("ShowBoxes") == false then
 		box.Transparency = 1
 	end
 
-	-- Lógica de HitLinger (faz desaparecer rápido)
+	-- Logica de HitLinger (faz desaparecer rapido)
 	if getConfigValue("HitLinger") == true then
-		task.wait(0.03)
+		wait(0.03)
 		box.Transparency = 1
 	end
 end)
 
--- Gerencia caixas de colisão (QueryBox)
+-- Gerencia caixas de colisao (QueryBox)
 workspace.DescendantAdded:Connect(function(box)
 	if box.Name ~= "QueryBox" then return end
 	if getConfigValue("ShowColision") == true then
