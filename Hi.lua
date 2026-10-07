@@ -44,11 +44,11 @@ local confirmFrame  = invFrame.ConfirmFrame
 local invKillerBtn  = invFrame.Killers
 local invSurvBtn    = invFrame.Survivors
 
--- Botão e frame de compra de Robux
+-- Botao e frame de compra de Robux
 local robuxBtn   = ui.RobuxButton
 local robuxFrame = ui.RobuxFrame
 
--- Os dois botões de gamepass dentro do RobuxFrame
+-- Os dois botoes de gamepass dentro do RobuxFrame
 local robuxPass1Btn = robuxFrame.ImageButton
 local robuxPass2Btn = robuxFrame.ImageButton2
 
@@ -57,18 +57,37 @@ local ROBUX_GAMEPASS_1_ID = 1906363913
 local ROBUX_GAMEPASS_2_ID = 1906051994
 
 -------------------------------------------------
--- HELPER: split (substitui string.split do Roblox)
+-- HELPERS DE COMPATIBILIDADE (2016)
 -------------------------------------------------
 
+-- split simples (substitui string.split)
 local function splitString(str, sep)
 	local parts = {}
-	local pattern = "([^" .. sep .. "]*)"
-	for piece in string.gmatch(str, pattern) do
+	for piece in string.gmatch(str, "([^" .. sep .. "]*)") do
 		if piece ~= "" then
 			table.insert(parts, piece)
 		end
 	end
 	return parts
+end
+
+-- FindFirstChildWhichIsA nao existia: procura com IsA
+local function findChildWhichIsA(parent, className)
+	for _, c in ipairs(parent:GetChildren()) do
+		if c:IsA(className) then return c end
+	end
+	return nil
+end
+
+-- rbxthumb:// nao existia: usa rbxassetid://
+local function renderImg(id)
+	return "rbxassetid://" .. tostring(id or "0")
+end
+
+-- Attributes nao existiam: o "Admin" agora e um BoolValue filho do player
+local function getFlag(obj, name)
+	local v = obj:FindFirstChild(name)
+	return v ~= nil and v.Value == true
 end
 
 -------------------------------------------------
@@ -122,7 +141,7 @@ local TWEEN_HOVER = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirect
 local TWEEN_CLICK = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local FALLBACK_DESC_SIZE = UDim2.new(0.3, 0, 1, 0)
-local FALLBACK_DESC_TEXT = "Sem descrição disponível."
+local FALLBACK_DESC_TEXT = "Sem descricao disponivel."
 
 local function frameOpen(frame, ti)
 	local target = getOrigSize(frame)
@@ -144,7 +163,7 @@ local function frameClose(frame, ti, onComplete)
 	TweenService:Create(frame, ti or TWEEN_CLOSE, {
 		Size = UDim2.new(0, 0, cur.Y.Scale, cur.Y.Offset)
 	}):Play()
-	task.delay((ti or TWEEN_CLOSE).Time, function()
+	delay((ti or TWEEN_CLOSE).Time, function()
 		frame.Visible = false
 		if onComplete then onComplete() end
 	end)
@@ -162,7 +181,7 @@ local function closeDetails(frame)
 	TweenService:Create(frame, TWEEN_CLOSE, {
 		Size = UDim2.new(0, 0, 1, 0)
 	}):Play()
-	task.delay(TWEEN_CLOSE.Time, function()
+	delay(TWEEN_CLOSE.Time, function()
 		frame.Visible = false
 	end)
 end
@@ -172,7 +191,7 @@ end
 -------------------------------------------------
 
 local function isPlayerAdmin()
-	return player:GetAttribute("Admin") == true
+	return getFlag(player, "Admin")
 end
 
 local BASE_XP = 100
@@ -200,14 +219,14 @@ end
 local savedTab = { shop = true, inv = true }
 
 -------------------------------------------------
--- EFEITOS DE BOTÃO
+-- EFEITOS DE BOTAO
 -------------------------------------------------
 
 local HOVER_SCALE  = 0.01
 local toggleColors = {}
 
 local function invertColor(c)
-	return Color3.new(1 - c.R, 1 - c.G, 1 - c.B)
+	return Color3.new(1 - c.r, 1 - c.g, 1 - c.b)
 end
 
 local function applyEffects(btn)
@@ -256,7 +275,7 @@ local function applyEffects(btn)
 		colorOut()
 		if info then
 			TweenService:Create(info, infoTI, { Size = UDim2.new(0, 0, 1, 0) }):Play()
-			task.delay(0.1, function() info.Visible = false end)
+			delay(0.1, function() info.Visible = false end)
 		end
 	end)
 end
@@ -338,7 +357,7 @@ local invIsOpen   = false
 local robuxIsOpen = false
 
 -------------------------------------------------
--- OWNERSHIP & VALIDAÇÃO
+-- OWNERSHIP & VALIDACAO
 -------------------------------------------------
 
 local function moduleExists(module, isKiller)
@@ -397,7 +416,7 @@ local function cleanInvalidSkins(isKiller)
 end
 
 -------------------------------------------------
--- CHECAGEM DE CONTEÚDO
+-- CHECAGEM DE CONTEUDO
 -------------------------------------------------
 
 local function characterHasSkins(charModule, isKiller, forInventory)
@@ -483,15 +502,15 @@ local function makeCard(template, scroll, module)
 	local card = template:Clone()
 	card.Visible = true
 	card.CharacterName.Text = (module.IsSkin and module.RigName) or module.CharacterName
-	card.RenderImage.Image  = "rbxthumb://type=Asset&id=" .. (module.CharacterRenderImage or "0") .. "&w=420&h=420"
+	card.RenderImage.Image  = renderImg(module.CharacterRenderImage)
 	if card:FindFirstChild("Price") then
 		card.Price.Text = module.CharacterPrice or "Free"
 	end
 	if module.IsSkin then
 		local info = card:FindFirstChild("Info")
 		if info then
-			local label = info:FindFirstChildWhichIsA("TextLabel")
-				or info:FindFirstChildWhichIsA("TextButton")
+			local label = findChildWhichIsA(info, "TextLabel")
+				or findChildWhichIsA(info, "TextButton")
 			if label then
 				label.Text = tostring(module.RapidCharacterInfo or "")
 			elseif info:IsA("TextLabel") or info:IsA("TextButton") then
@@ -579,7 +598,7 @@ local function shopShowSkins(charModule, isKiller)
 							buySkinFrame.Price.Text = "Price: " .. (skinModule.CharacterPrice or "Free")
 						end
 						if buySkinFrame:FindFirstChild("RenderImage") then
-							buySkinFrame.RenderImage.Image = "rbxthumb://type=Asset&id=" .. (skinModule.CharacterRenderImage or "0") .. "&w=420&h=420"
+							buySkinFrame.RenderImage.Image = renderImg(skinModule.CharacterRenderImage)
 						end
 					end)
 				end
@@ -600,14 +619,14 @@ shopShowCharacter = function(moduleScript, isKiller)
 	module.__ModuleScript = moduleScript
 	shopState.charModule  = module
 	shopDetails.CharacterName.Text = module.CharacterName or "???"
-	shopDetails.Photo.Image = "rbxthumb://type=Asset&id=" .. (module.CharacterRenderImage or "0") .. "&w=420&h=420"
+	shopDetails.Photo.Image = renderImg(module.CharacterRenderImage)
 	shopDetails.RapidInfo.Text = tostring(module.RapidCharacterInfo or "")
 	if shopDetails:FindFirstChild("Price") then
 		shopDetails.Price.Text = "Price: " .. (module.CharacterPrice or "Free")
 	end
 	shopSetBtnStates(module, isKiller)
 	openDetails(shopDetails)
-	if shopState.skinsConnection then shopState.skinsConnection:Disconnect() end
+	if shopState.skinsConnection then shopState.skinsConnection:disconnect() end
 	shopState.skinsConnection = shopDetails.Skins.MouseButton1Click:Connect(function()
 		if shopState.viewingSkins then
 			shopState.viewingSkins = false
@@ -640,7 +659,7 @@ buySkinFrame.Buy.MouseButton1Click:Connect(function()
 	local m = shopState.skinModule
 	buySkinEvent:FireServer(m.CharacterName, m.RigName, shopState.isKiller)
 	frameClose(buySkinFrame, nil, function()
-		task.wait(0.3)
+		wait(0.3)
 		if shopState.charModule then
 			shopShowSkins(shopState.charModule, shopState.isKiller)
 		end
@@ -697,7 +716,7 @@ local function invUpdateXPDisplay(characterName, isKiller)
 		label.BackgroundTransparency = 1
 		label.TextColor3             = Color3.fromRGB(255, 255, 255)
 		label.TextScaled             = true
-		label.Font                   = Enum.Font.GothamBold
+		label.Font                   = Enum.Font.SourceSansBold -- Gotham pode nao existir em 2016
 		label.Parent                 = invDetails
 	end
 	label.Visible = true
@@ -735,7 +754,7 @@ local function invEquipSkin(skinModule, isKiller)
 	elseif invState.charModule then
 		equipSkinEvent:FireServer(invState.charModule.CharacterName, "Default", isKiller)
 	end
-	task.wait(0.2)
+	wait(0.2)
 	invRefreshBadges(isKiller)
 end
 
@@ -839,7 +858,7 @@ invShowCharacter = function(moduleScript, isKiller)
 	invState.charModule   = module
 
 	invDetails.CharacterName.Text = module.CharacterName or "???"
-	invDetails.Photo.Image        = "rbxthumb://type=Asset&id=" .. (module.CharacterRenderImage or "0") .. "&w=420&h=420"
+	invDetails.Photo.Image        = renderImg(module.CharacterRenderImage)
 	invDetails.RapidInfo.Text     = tostring(module.RapidCharacterInfo or "")
 	if invDetails:FindFirstChild("Price") then
 		invDetails.Price.Text = "Price: " .. (module.CharacterPrice or "Free")
@@ -849,7 +868,7 @@ invShowCharacter = function(moduleScript, isKiller)
 	invUpdateXPDisplay(module.CharacterName, isKiller)
 	openDetails(invDetails)
 
-	if invState.skinsConnection then invState.skinsConnection:Disconnect() end
+	if invState.skinsConnection then invState.skinsConnection:disconnect() end
 	invState.skinsConnection = invDetails.Skins.MouseButton1Click:Connect(function()
 		if invState.viewingSkins then
 			invState.viewingSkins = false
@@ -906,7 +925,7 @@ invKillerBtn.MouseButton1Click:Connect(function() invLoadSection(true)  end)
 invSurvBtn.MouseButton1Click:Connect(function()   invLoadSection(false) end)
 
 -------------------------------------------------
--- BOTÕES TOGGLE
+-- BOTOES TOGGLE
 -------------------------------------------------
 
 shopBtn.MouseButton1Click:Connect(function()
@@ -1030,7 +1049,7 @@ local function watchNewCharacters(isKiller)
 	local folder = actors:FindFirstChild(isKiller and "Killer" or "Survivor")
 	if not folder then return end
 	folder.ChildAdded:Connect(function()
-		task.wait(0.1)
+		wait(0.1)
 		if invIsOpen  and invState.isKiller  == isKiller then invLoadSection(isKiller)  end
 		if shopIsOpen and shopState.isKiller == isKiller then shopLoadSection(isKiller) end
 	end)
@@ -1043,7 +1062,7 @@ local function watchNewSkins(isKiller)
 	if not folder then return end
 	local function monitorSkinFolder(skinsFolder, characterName)
 		skinsFolder.ChildAdded:Connect(function()
-			task.wait(0.1)
+			wait(0.1)
 			if invIsOpen and invState.viewingSkins and
 				invState.charModule and invState.charModule.CharacterName == characterName and
 				invState.isKiller == isKiller then
