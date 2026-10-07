@@ -4,7 +4,8 @@ local ServerStorage     = game:GetService("ServerStorage")
 local SoundService      = game:GetService("SoundService")
 local RunService        = game:GetService("RunService")
 local TweenService      = game:GetService("TweenService")
-local ContentProvider   = game:GetService("ContentProvider") -- pra descobrir a duração do som de LMS
+local ContentProvider   = game:GetService("ContentProvider") -- pra descobrir a duracao do som de LMS
+local Debris            = game:GetService("Debris")
 
 local ActorModule  = require(ReplicatedStorage.Modules.Actors)
 local Config       = require(script.RoundConfig)
@@ -17,7 +18,7 @@ local musicsLMS      = ServerStorage.Musics.LMS
 local musicsChase    = ServerStorage.Musics.Chase
 local sound30sTemplate = ServerStorage.Musics:FindFirstChild("30s") -- ajuste o nome se for diferente
 if sound30sTemplate then
-	sound30sTemplate.Playing = false -- proteção: o template nunca deve tocar sozinho
+	sound30sTemplate.Playing = false -- protecao: o template nunca deve tocar sozinho
 end
 
 local GenEvents            = ReplicatedStorage.RemoteEvents.GeneratorEvents
@@ -26,8 +27,42 @@ local RE_Exit              = GenEvents.ExitGenerator
 local RE_StartPuzzle       = GenEvents.StartPuzzle
 local RE_GenUpdated        = GenEvents.GeneratorUpdated
 local RE_PuzzleResult      = GenEvents.PuzzleResult
--- RE_ChaseMute e RE_ChaseKillerFilter foram removidos: o novo sistema de áudio
--- decide tudo localmente no client (nome do Sound + atributo IsKiller), sem remotos.
+
+-------------------------------------------------
+-- HELPERS DE COMPATIBILIDADE (2016)
+-------------------------------------------------
+
+-- FindFirstChildOfClass nao existia: procura pelo ClassName
+local function findChildOfClass(parent, className)
+	for _, c in ipairs(parent:GetChildren()) do
+		if c.ClassName == className then return c end
+	end
+	return nil
+end
+
+-- SetAttribute nao existia: guarda a flag num BoolValue filho do player
+-- (o LocalScript de audio do client precisa ler esse BoolValue "IsKiller" em vez do atributo)
+local function setPlayerFlag(plr, name, value)
+	local v = plr:FindFirstChild(name)
+	if not v then
+		v = Instance.new("BoolValue")
+		v.Name = name
+		v.Parent = plr
+	end
+	v.Value = value
+end
+
+-- Highlight nao existia: usa SelectionBox no lugar
+local function createHighlight(adornee, color)
+	local h = Instance.new("SelectionBox")
+	h.Adornee             = adornee
+	h.Color3              = color
+	h.SurfaceColor3       = color
+	h.SurfaceTransparency = 0.5
+	h.LineThickness       = 0.05
+	h.Parent              = adornee
+	Debris:AddItem(h, 7)
+end
 
 -------------------------------------------------
 -- GLOBALS
@@ -62,16 +97,18 @@ local function GetLMSTime()
 	return Config.LMSTime
 end
 
--- Configuração da Chase Theme / Terror Radius
+-- Configuracao da Chase Theme / Terror Radius
 local CHASE_START_DIST = 20  -- entra em chase de verdade
 local CHASE_STOP_DIST  = 75  -- sai do chase, volta pro terror radius
 
-local TERROR_LAYER_3_DIST = 30  -- Layer 3: de 50 até CHASE_START_DIST
-local TERROR_LAYER_2_DIST = 50  -- Layer 2: de 70 até 50
-local TERROR_LAYER_1_DIST = 70  -- Layer 1: de 100 até 70 (acima disso, silêncio)
+local TERROR_LAYER_3_DIST = 30
+local TERROR_LAYER_2_DIST = 50
+local TERROR_LAYER_1_DIST = 70  -- acima disso, silencio
 
 -------------------------------------------------
 -- GENERATOR SYSTEM
+-- (ProximityPrompt nao existia em 2016: agora usa ClickDetector no SpawnPart.
+--  Nao tem HoldDuration; o clique abre o puzzle na hora.)
 -------------------------------------------------
 
 local GeneratorSystem = {}
@@ -124,8 +161,11 @@ function GeneratorSystem:Broadcast()
 	end
 end
 
+-- ClickDetector nao tem "Enabled": distancia 0 = ninguem consegue clicar
 function GeneratorSystem:SetPromptEnabled(gen, enabled)
-	if gen and gen.Prompt then gen.Prompt.Enabled = enabled end
+	if gen and gen.Click then
+		gen.Click.MaxActivationDistance = enabled and self.config.InteractDistance or 0
+	end
 end
 
 function GeneratorSystem:Setup(map)
@@ -139,18 +179,14 @@ function GeneratorSystem:Setup(map)
 
 	for _, spawnPart in ipairs(folder:GetChildren()) do
 		if spawnPart:IsA("BasePart") then
-			local promptPart = spawnPart
-			local prompt = Instance.new("ProximityPrompt", promptPart)
-			prompt.ActionText            = "Repair"
-			prompt.ObjectText            = "Generator"
-			prompt.KeyboardKeyCode       = Enum.KeyCode.E
-			prompt.MaxActivationDistance = self.config.InteractDistance
-			prompt.HoldDuration          = 0.2
+			local click = Instance.new("ClickDetector")
+			click.MaxActivationDistance = self.config.InteractDistance
+			click.Parent = spawnPart
 
 			local genName = spawnPart.Name
 			self.generators[genName] = {
 				SpawnPart    = spawnPart,
-				Prompt       = prompt,
+				Click        = click,
 				Layers       = 0,
 				MaxLayers    = self.config.GeneratorLayers,
 				Complete     = false,
@@ -158,7 +194,7 @@ function GeneratorSystem:Setup(map)
 				InitialPos   = nil,
 			}
 
-			prompt.Triggered:Connect(function(player)
+			click.MouseClick:Connect(function(player)
 				self:OnPromptTriggered(player, genName)
 			end)
 		end
@@ -204,9 +240,9 @@ function GeneratorSystem:OnLayerComplete(player, genId, giveRewardsCallback)
 		)
 	end
 
-	if gen.Prompt and gen.Prompt.Parent then
-		gen.Prompt:Destroy()
-		gen.Prompt = nil
+	if gen.Click and gen.Click.Parent then
+		gen.Click:Destroy()
+		gen.Click = nil
 	end
 
 	RE_PuzzleResult:FireClient(player, true, "GENERATOR_COMPLETE")
@@ -244,12 +280,12 @@ function GeneratorSystem:StartProximityCheck()
 					if not hrp then
 						shouldCancel = true
 					else
-						local dist = (hrp.Position - self:GetPosition(gen)).Magnitude
+						local dist = (hrp.Position - self:GetPosition(gen)).magnitude
 						if dist > self.config.InteractDistance + 4 then
 							shouldCancel = true
 						end
 
-						if gen.InitialPos and (hrp.Position - gen.InitialPos).Magnitude > 3 then
+						if gen.InitialPos and (hrp.Position - gen.InitialPos).magnitude > 3 then
 							shouldCancel = true
 						end
 					end
@@ -276,7 +312,7 @@ end
 
 function GeneratorSystem:Cleanup()
 	for _, conn in ipairs(self.connections) do
-		if conn then conn:Disconnect() end
+		if conn then conn:disconnect() end
 	end
 	self.connections = {}
 	self.generators  = {}
@@ -299,10 +335,10 @@ local RoundState = {
 	timeReduction = 0,
 	genSystem     = nil,
 	chaseConnection        = nil,
-	killerChaseActive      = false, -- true = killer deve ouvir a Chase agora
-	killerChaseSound       = nil,   -- instância de Sound exclusiva do killer
-	mapMusic               = nil,   -- Sound de ambiente do mapa atual
-	mapMusicOriginalVolume = nil,   -- volume original, pra saber pra onde restaurar depois do duck
+	killerChaseActive      = false,
+	killerChaseSound       = nil,
+	mapMusic               = nil,
+	mapMusicOriginalVolume = nil,
 	sound30sPlayed         = false,
 	sound30sRef            = nil,
 }
@@ -344,7 +380,7 @@ end
 
 local function DisconnectAll()
 	for _, conn in ipairs(RoundState.connections) do
-		if conn then conn:Disconnect() end
+		if conn then conn:disconnect() end
 	end
 	RoundState.connections = {}
 end
@@ -356,9 +392,8 @@ local function FormatTime(seconds)
 	return string.format("%d:%02d", m, s)
 end
 
--- Baixa (duck) ou restaura o volume da música ambiente do mapa.
--- Fica baixa sempre que Chase, aviso de 30s, ou LMS estiverem ativos.
-local MAP_MUSIC_DUCK_MULTIPLIER = 0.25 -- 25% do volume original enquanto abaixado
+-- Baixa (duck) ou restaura o volume da musica ambiente do mapa.
+local MAP_MUSIC_DUCK_MULTIPLIER = 0.25
 local MAP_MUSIC_DUCK_FADE_TIME  = 1
 
 local function UpdateMapMusicDuck()
@@ -452,11 +487,9 @@ end
 -- CHASE MUSIC / TERROR RADIUS
 -------------------------------------------------
 
--- Usa o Humanoid pra achar o RootPart, em vez de procurar "HumanoidRootPart" pelo nome.
--- Mais confiável com rigs diferentes (R6/R15/custom) e evita falhas silenciosas.
 local function GetActorRoot(actor)
 	if not actor then return nil end
-	local humanoid = actor:FindFirstChildOfClass("Humanoid")
+	local humanoid = findChildOfClass(actor, "Humanoid")
 	if humanoid and humanoid.RootPart then
 		return humanoid.RootPart
 	end
@@ -464,13 +497,12 @@ local function GetActorRoot(actor)
 end
 
 local function GetClosestSurvivorDistance(killerRoot)
-	-- (mantido só como utilitário caso outra parte do código precise no futuro)
 	local closest = math.huge
 	for _, data in ipairs(RoundState.survivors) do
 		if data.isAlive and data.actor and data.actor.Parent then
 			local hrp = GetActorRoot(data.actor)
 			if hrp then
-				local dist = (hrp.Position - killerRoot.Position).Magnitude
+				local dist = (hrp.Position - killerRoot.Position).magnitude
 				if dist < closest then
 					closest = dist
 				end
@@ -481,8 +513,6 @@ local function GetClosestSurvivorDistance(killerRoot)
 end
 
 -- Busca o som certo em ServerStorage.Musics.Chase.<Killer>[.Skins.<Skin>].<stageName>
--- stageName = "Layer 1" | "Layer 2" | "Layer 3" | "Chase"
--- Fallback: pasta "Default" se o killer não tiver o estágio específico.
 local function GetChaseSound(killerPlayer, stageName)
 	local killerChar = GetEquippedCharName(killerPlayer, true) or "Unknown"
 	local killerSkin = GetEquippedSkin(killerPlayer, true, killerChar)
@@ -515,12 +545,9 @@ local function GetChaseSound(killerPlayer, stageName)
 	return soundToPlay
 end
 
--- Duração da transição suave entre estágios (terror radius <-> chase)
 local CHASE_FADE_TIME = 1
 
--- Troca (com fade) o som PESSOAL de UM sobrevivente. stageName == nil -> silêncio.
--- Cada sobrevivente tem seu próprio clone (nome inclui o UserId dele), então nunca
--- depende do que está acontecendo com nenhum outro sobrevivente.
+-- Troca (com fade) o som PESSOAL de UM sobrevivente. stageName == nil -> silencio.
 local function SetSurvivorStage(data, stageName)
 	if stageName == data.stage then return end
 
@@ -539,16 +566,16 @@ local function SetSurvivorStage(data, stageName)
 
 	local template = GetChaseSound(RoundState.killer, stageName)
 	if not template then
-		warn("[Chase] Nenhum som encontrado pro estágio '" .. stageName .. "'")
+		warn("[Chase] Nenhum som encontrado pro estagio '" .. stageName .. "'")
 		return
 	end
 
 	local targetVolume = template.Volume
 
 	local clone = template:Clone()
-	clone.Name   = "PersonalChase_" .. data.player.UserId -- exclusivo desse sobrevivente
+	clone.Name   = "PersonalChase_" .. data.player.UserId
 	clone.Looped = true
-	clone.Volume = 0 -- começa mudo e sobe suavemente
+	clone.Volume = 0
 	clone.Parent = SoundService
 	clone:Play()
 
@@ -558,8 +585,7 @@ local function SetSurvivorStage(data, stageName)
 	data.sound = clone
 end
 
--- Decide o estágio (Layer 1/2/3/Chase/nil) pra UM sobrevivente, com histerese própria
--- (uma vez que ele entra em Chase, só sai quando o killer se afasta o suficiente DELE).
+-- Decide o estagio (Layer 1/2/3/Chase/nil) pra UM sobrevivente, com histerese propria
 local function DetermineStage(data, dist)
 	if data.chaseActive then
 		if dist >= CHASE_STOP_DIST then
@@ -583,8 +609,7 @@ local function DetermineStage(data, dist)
 	end
 end
 
--- Liga/desliga o tema de Chase do killer. Ele NUNCA ouve Layers — só a Chase,
--- e só quando pelo menos um sobrevivente estiver no estágio "Chase" agora.
+-- Liga/desliga o tema de Chase do killer
 local function SetKillerChaseActive(active)
 	if active == RoundState.killerChaseActive then return end
 	RoundState.killerChaseActive = active
@@ -608,7 +633,7 @@ local function SetKillerChaseActive(active)
 
 	local targetVolume = template.Volume
 	local clone = template:Clone()
-	clone.Name   = "KillerChaseSound" -- só o client do killer deixa esse tocar (ver LocalScript)
+	clone.Name   = "KillerChaseSound"
 	clone.Looped = true
 	clone.Volume = 0
 	clone.Parent = SoundService
@@ -622,7 +647,7 @@ end
 
 local function StopChaseDetection()
 	if RoundState.chaseConnection then
-		RoundState.chaseConnection:Disconnect()
+		RoundState.chaseConnection:disconnect()
 		RoundState.chaseConnection = nil
 	end
 
@@ -655,7 +680,7 @@ local function StartChaseDetection()
 				if data.actor and data.actor.Parent then
 					local hrp = GetActorRoot(data.actor)
 					if hrp then
-						dist = (hrp.Position - killerRoot.Position).Magnitude
+						dist = (hrp.Position - killerRoot.Position).magnitude
 					end
 				end
 
@@ -683,7 +708,7 @@ local function SetupSurvivorsDetection()
 			if data.actor == actorModel and data.isAlive then
 				data.isAlive = false
 				RoundState.timeBonus = RoundState.timeBonus + Config.KillTimeBonus
-				SetSurvivorStage(data, nil) -- para o som pessoal dele direto, sem remoto
+				SetSurvivorStage(data, nil)
 				print("[Death] Survivor", actorModel.Name, "died")
 				break
 			end
@@ -716,8 +741,7 @@ local function StopLMSMusic()
 	end
 end
 
--- Só ACHA o som certo pra essa dupla killer/sobrevivente, sem tocar ainda
--- (separado de PlayLMSMusic pra dar pra descobrir a duração antes de decidir o totalTime da LMS)
+-- So ACHA o som certo pra essa dupla killer/sobrevivente, sem tocar ainda
 local function ResolveLMSSound(killerPlayer, lastSurvivorPlayer)
 	local killerChar = GetEquippedCharName(killerPlayer, true)  or "Unknown"
 	local killerSkin = GetEquippedSkin(killerPlayer, true, killerChar)
@@ -777,8 +801,7 @@ local function ResolveLMSSound(killerPlayer, lastSurvivorPlayer)
 	return soundToPlay
 end
 
--- Descobre a duração (em segundos) de um Sound, pré-carregando se precisar.
--- Retorna nil se não conseguir descobrir (asset não carrega, som não encontrado, etc).
+-- Descobre a duracao (em segundos) de um Sound, pre-carregando se precisar.
 local function GetSoundDuration(soundTemplate)
 	if not soundTemplate then return nil end
 
@@ -801,7 +824,7 @@ local function PlayLMSMusic(killerPlayer, soundTemplate)
 	StopLMSMusic()
 
 	if not soundTemplate then
-		return -- ResolveLMSSound já deu warn se não achou nada
+		return
 	end
 
 	local clone = soundTemplate:Clone()
@@ -827,8 +850,6 @@ local function StopSound30s()
 	end
 end
 
--- Chamado quando um timeBonus empurra o timer de volta pra cima de 30s:
--- dá fade out suave em vez de cortar seco, e libera pra tocar de novo depois.
 local function FadeOutSound30s()
 	if not RoundState.sound30sRef then return end
 	local snd = RoundState.sound30sRef
@@ -844,9 +865,9 @@ end
 
 local function PlaySound30s()
 	if RoundState.sound30sPlayed then return end
-	if RoundState.lmsTriggered then return end -- LMS não conta
+	if RoundState.lmsTriggered then return end
 	if not sound30sTemplate then
-		warn("[Warning30s] Som '30s' não encontrado em ServerStorage.Musics")
+		warn("[Warning30s] Som '30s' nao encontrado em ServerStorage.Musics")
 		return
 	end
 
@@ -861,29 +882,17 @@ local function PlaySound30s()
 end
 
 -------------------------------------------------
--- LMS HIGHLIGHTS
+-- LMS HIGHLIGHTS (SelectionBox no lugar de Highlight)
 -------------------------------------------------
 
 local function CreateLMSHighlights()
 	if RoundState.killerActor and RoundState.killerActor.Parent then
-		local h = Instance.new("Highlight")
-		h.FillColor           = Color3.fromRGB(255, 30, 30)
-		h.OutlineColor        = Color3.fromRGB(200, 0, 0)
-		h.FillTransparency    = 0.5
-		h.OutlineTransparency = 0
-		h.Parent = RoundState.killerActor
-		game:GetService("Debris"):AddItem(h, 7)
+		createHighlight(RoundState.killerActor, Color3.fromRGB(255, 30, 30))
 	end
 
 	local _, lastData = CountAliveSurvivors()
 	if lastData and lastData.actor and lastData.actor.Parent then
-		local h = Instance.new("Highlight")
-		h.FillColor           = Color3.fromRGB(255, 200, 50)
-		h.OutlineColor        = Color3.fromRGB(255, 160, 0)
-		h.FillTransparency    = 0.5
-		h.OutlineTransparency = 0
-		h.Parent = lastData.actor
-		game:GetService("Debris"):AddItem(h, 7)
+		createHighlight(lastData.actor, Color3.fromRGB(255, 200, 50))
 	end
 end
 
@@ -913,8 +922,6 @@ end
 -- MAP
 -------------------------------------------------
 
--- Nome do mapa (em ServerStorage.Maps) -> nome do Sound de ambiente (solto em Workspace).
--- Só precisa de entrada aqui quando o nome for diferente; por padrão, usa o mesmo nome do mapa.
 local MAP_MUSIC_OVERRIDES = {
 	["The Florest"] = "Florest",
 }
@@ -923,11 +930,10 @@ local function GetMapMusicName(mapName)
 	return MAP_MUSIC_OVERRIDES[mapName] or mapName
 end
 
--- Para a música de ambiente do mapa anterior, se estiver tocando
 local function StopMapMusic()
 	if RoundState.mapMusic then
 		if RoundState.mapMusicOriginalVolume then
-			RoundState.mapMusic.Volume = RoundState.mapMusicOriginalVolume -- restaura antes de soltar a referência
+			RoundState.mapMusic.Volume = RoundState.mapMusicOriginalVolume
 		end
 		RoundState.mapMusic:Stop()
 		RoundState.mapMusic = nil
@@ -935,7 +941,6 @@ local function StopMapMusic()
 	RoundState.mapMusicOriginalVolume = nil
 end
 
--- Toca a música de ambiente correspondente ao mapa que acabou de ser selecionado
 local function PlayMapMusic(mapName)
 	StopMapMusic()
 
@@ -947,7 +952,7 @@ local function PlayMapMusic(mapName)
 		sound:Play()
 		RoundState.mapMusic = sound
 		RoundState.mapMusicOriginalVolume = sound.Volume
-		UpdateMapMusicDuck() -- reflete o estado atual (ex: se já tiver LMS ativa por algum motivo)
+		UpdateMapMusicDuck()
 	else
 		warn("[MapMusic] Nenhum Sound chamado '" .. musicName .. "' encontrado em Workspace")
 	end
@@ -964,7 +969,7 @@ local function SelectMap()
 	clone.Parent  = folder
 	UpdateStats("Map: " .. clone.Name)
 	PlayMapMusic(clone.Name)
-	task.wait(3)
+	wait(3)
 	return clone
 end
 
@@ -1053,29 +1058,26 @@ local function RunRound()
 			RoundState.lmsTriggered = true
 			UpdateMapMusicDuck()
 			CreateLMSHighlights()
-			StopChaseDetection() -- evita sobrepor Chase com a música de LMS
-			StopSound30s()       -- LMS não conta pro aviso de 30s
+			StopChaseDetection()
+			StopSound30s()
 
-			-- A duração da LMS acompanha o tamanho do som escolhido.
-			-- Só cai no GetLMSTime() (RoundConfig) como fallback se não achar som/duração.
 			local lmsSoundTemplate = lastData and ResolveLMSSound(RoundState.killer, lastData.player) or nil
 			local lmsDuration = GetSoundDuration(lmsSoundTemplate) or GetLMSTime()
 			totalTime = elapsed + lmsDuration
 
 			if lastData and RoundState.killer then
-				task.spawn(function()
+				spawn(function()
 					PlayLMSMusic(RoundState.killer, lmsSoundTemplate)
 				end)
 			end
 		end
 
-		-- Aviso de 30 segundos (não conta durante LMS)
+		-- Aviso de 30 segundos (nao conta durante LMS)
 		if not RoundState.lmsTriggered then
 			local remaining = totalTime - elapsed
 			if remaining <= 30 then
 				PlaySound30s()
 			elseif RoundState.sound30sPlayed then
-				-- timeBonus empurrou o timer de volta pra cima de 30s
 				FadeOutSound30s()
 				RoundState.sound30sPlayed = false
 				UpdateMapMusicDuck()
@@ -1084,7 +1086,7 @@ local function RunRound()
 
 		UpdateStats(BuildStatusText(totalTime - elapsed))
 		UpdateGeneratorStats()
-		task.wait(1)
+		wait(1)
 		elapsed = elapsed + 1
 	end
 
@@ -1148,7 +1150,7 @@ local function Intermission()
 		end
 
 		UpdateStats("Next round in " .. i .. "s")
-		task.wait(1)
+		wait(1)
 	end
 end
 
@@ -1211,8 +1213,9 @@ local function PlayOneRound()
 	RoundState.sound30sPlayed = false
 	RoundState.sound30sRef    = nil
 
-	for _, p in ipairs(Players:GetPlayers()) do -- pra filtrar layers no client do killer
-		p:SetAttribute("IsKiller", p == killer)
+	-- pra filtrar layers no client do killer (BoolValue "IsKiller" dentro do player)
+	for _, p in ipairs(Players:GetPlayers()) do
+		setPlayerFlag(p, "IsKiller", p == killer)
 	end
 
 	GetPlayersFolder()
@@ -1232,9 +1235,9 @@ local function PlayOneRound()
 					player      = player,
 					actor       = actor,
 					isAlive     = true,
-					stage       = nil,   -- estágio atual ("Layer 1/2/3"/"Chase"/nil)
-					chaseActive = false, -- histerese própria desse sobrevivente
-					sound       = nil,   -- instância de Sound pessoal dele
+					stage       = nil,
+					chaseActive = false,
+					sound       = nil,
 				})
 			end
 		end
@@ -1250,14 +1253,14 @@ local function PlayOneRound()
 	SetupSurvivorsDetection()
 	SetupKillerDetection()
 
-	task.wait(1)
+	wait(1)
 
 	UpdateStats("Creating Killer...")
 	if killer:IsDescendantOf(Players) then
 		RoundState.killerActor = CreateActor(killer, true, map)
 	end
 
-	task.wait(2)
+	wait(2)
 
 	StartChaseDetection()
 
@@ -1266,40 +1269,40 @@ local function PlayOneRound()
 	if winner == "Cancelled" then
 		UpdateStats("Round Cancelled - Not enough players")
 		Cleanup()
-		task.wait(0.5)
+		wait(0.5)
 		DestroyMap(map)
-		task.wait(Config.ResultDisplayTime)
+		wait(Config.ResultDisplayTime)
 	elseif winner == "Killer" then
 		UpdateStats("Killer Wins!")
 		functions:ShowKillerWin(RoundState.killerActor)
 		RoundRewards:DistributeRewards(Config, RoundState.killer, RoundState.survivors, winner)
 		Cleanup()
-		task.wait(0.5)
+		wait(0.5)
 		DestroyMap(map)
-		task.wait(Config.ResultDisplayTime)
+		wait(Config.ResultDisplayTime)
 	else
 		local reason = not RoundState.killerAlive
-			and "Killer Eliminated — Survivors Win!"
+			and "Killer Eliminated - Survivors Win!"
 			or  "Survivors Win!"
 		UpdateStats(reason)
 		functions:ShowSurvivorsWin()
-		task.wait(0.5)
+		wait(0.5)
 		RoundRewards:DistributeRewards(Config, RoundState.killer, RoundState.survivors, winner)
 		Cleanup()
-		task.wait(0.5)
+		wait(0.5)
 		DestroyMap(map)
-		task.wait(Config.ResultDisplayTime)
+		wait(Config.ResultDisplayTime)
 	end
 end
 
-task.spawn(function()
-	task.wait(2)
+spawn(function()
+	wait(2)
 
 	while true do
 		repeat
 			local count = #Players:GetPlayers()
 			UpdateStats(string.format("Waiting for players... (%d/%d)", count, Config.MinPlayers))
-			task.wait(1)
+			wait(1)
 		until #Players:GetPlayers() >= Config.MinPlayers
 
 		Intermission()
