@@ -16,7 +16,26 @@ local backBtn   = specFrame.Back
 local label     = specFrame.Label
 
 -------------------------------------------------
--- UI EFFECTS (mesmo padrão do ShopInventory)
+-- HELPERS DE COMPATIBILIDADE (2016)
+-------------------------------------------------
+
+-- FindFirstChildOfClass nao existia: procura pelo ClassName
+local function findChildOfClass(parent, className)
+	for _, c in ipairs(parent:GetChildren()) do
+		if c.ClassName == className then return c end
+	end
+	return nil
+end
+
+-- Attributes nao existiam: le um StringValue filho com esse nome
+local function getStringValue(obj, name)
+	local v = obj:FindFirstChild(name)
+	if v and v.Value ~= "" then return v.Value end
+	return nil
+end
+
+-------------------------------------------------
+-- UI EFFECTS (mesmo padrao do ShopInventory)
 -------------------------------------------------
 
 local HOVER_SCALE = 0.01
@@ -24,7 +43,7 @@ local TWEEN_HOVER = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirect
 local TWEEN_CLICK = TweenInfo.new(0.1,  Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local function invertColor(c)
-	return Color3.new(1 - c.R, 1 - c.G, 1 - c.B)
+	return Color3.new(1 - c.r, 1 - c.g, 1 - c.b)
 end
 
 local function applyEffects(btn)
@@ -78,8 +97,9 @@ local function applyEffects(btn)
 		TweenService:Create(btn, TWEEN_HOVER, { Size = origSize }):Play()
 		if have then
 			TweenService:Create(btn.Info, infoTI, out):Play()
-			task.wait(0.1)
-			btn.Info.Visible = false
+			delay(0.1, function()
+				btn.Info.Visible = false
+			end)
 		end
 	end)
 end
@@ -122,7 +142,7 @@ local function isInLobby()
 	local char = player.Character
 	if not char then return true end
 
-	-- Se o character está em Survivors ou Killers, não está no lobby
+	-- Se o character esta em Survivors ou Killers, nao esta no lobby
 	return not isActorInGame(char)
 end
 
@@ -134,11 +154,12 @@ local function buildAliveList()
 	for _, roleFolder in ipairs(playersFolder:GetChildren()) do
 		if roleFolder.Name == "Survivors" or roleFolder.Name == "Killers" then
 			for _, actor in ipairs(roleFolder:GetChildren()) do
-				-- Actor está vivo se está dentro da pasta
+				-- Actor esta vivo se esta dentro da pasta
 				if actor.Parent then
 					local owner    = Players:GetPlayerFromCharacter(actor)
 					local pName    = owner and owner.Name or actor.Name
-					local charName = actor:GetAttribute("CharName") or actor.Name
+					-- antes era actor:GetAttribute("CharName"); agora e um StringValue "CharName"
+					local charName = getStringValue(actor, "CharName") or actor.Name
 					table.insert(aliveList, {
 						playerName = pName,
 						charName   = charName,
@@ -164,7 +185,7 @@ local function stopSpectating()
 	isSpectating = false
 
 	if heartbeatConn then
-		heartbeatConn:Disconnect()
+		heartbeatConn:disconnect()
 		heartbeatConn = nil
 	end
 
@@ -177,7 +198,7 @@ local function stopSpectating()
 	camera.CameraType = Enum.CameraType.Custom
 	local char = player.Character
 	if char then
-		camera.CameraSubject = char:FindFirstChildOfClass("Humanoid")
+		camera.CameraSubject = findChildOfClass(char, "Humanoid")
 	end
 
 	specFrame.Visible = false
@@ -206,7 +227,7 @@ local function startSpectating()
 	specPart.Transparency = 1
 	specPart.Parent       = workspace
 
-	-- Câmera segue o SpecPart
+	-- Camera segue o SpecPart
 	camera.CameraType    = Enum.CameraType.Custom
 	camera.CameraSubject = specPart
 
@@ -214,10 +235,9 @@ local function startSpectating()
 	heartbeatConn = RunService.Heartbeat:Connect(function()
 		if not isSpectating then return end
 
-		-- Remove atores mortos da lista (atores que não existem mais no workspace)
+		-- Remove atores mortos da lista (atores que nao existem mais no workspace)
 		for i = #aliveList, 1, -1 do
 			local entry = aliveList[i]
-			-- Actor morreu = foi removido da pasta (não tem mais Parent)
 			if not entry.actor or not entry.actor.Parent then
 				table.remove(aliveList, i)
 				if currentIndex > #aliveList then
@@ -269,7 +289,7 @@ backBtn.MouseButton1Click:Connect(function()
 end)
 
 -------------------------------------------------
--- Esconde o botão se não estiver no lobby
+-- Esconde o botao se nao estiver no lobby
 -------------------------------------------------
 
 local function checkLobbyVisibility()
@@ -281,7 +301,7 @@ end
 
 player.CharacterAdded:Connect(function(char)
 	char:WaitForChild("Humanoid")
-	task.wait(0.5)
+	wait(0.5)
 	checkLobbyVisibility()
 end)
 
