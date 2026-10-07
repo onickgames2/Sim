@@ -21,8 +21,10 @@ local XP_STEP        = 75
 local store          = DataStoreService:GetDataStore(DATASTORE_NAME)
 
 --------------------------------------------------
--- HELPER: split (substitui string.split do Roblox)
+-- HELPERS DE COMPATIBILIDADE (2016)
 --------------------------------------------------
+
+-- split simples (substitui string.split)
 local function splitString(str, sep)
 	local parts = {}
 	for piece in string.gmatch(str, "([^" .. sep .. "]*)") do
@@ -58,7 +60,7 @@ local killerAssets   = assets:WaitForChild("Killers")
 local survivorAssets = assets:WaitForChild("Survivors")
 
 --------------------------------------------------
--- GUARD DE REENTRÂNCIA
+-- GUARD DE REENTRANCIA
 --------------------------------------------------
 local xpGuard = {}
 
@@ -108,8 +110,10 @@ local function getModuleScript(characterName, isKiller, skinName)
 	return charFolder:FindFirstChild("Default")
 end
 
+-- GetAttribute("Admin") nao existia: agora e um BoolValue "Admin" filho do player
 local function isPlayerAdmin(player)
-	return player:GetAttribute("Admin") == true
+	local v = player:FindFirstChild("Admin")
+	return v ~= nil and v.Value == true
 end
 
 local function getCharFolder(player, isKiller)
@@ -160,7 +164,7 @@ end
 --------------------------------------------------
 
 local MILESTONE_ICON = "122674199843438"
-local LEVELUP_ICON   = "122674199843438" -- troque pelo ID de imagem que quiser usar pro level up genérico
+local LEVELUP_ICON   = "122674199843438" -- troque pelo ID de imagem que quiser usar pro level up generico
 
 local function getCharacterRenderImage(characterName, isKiller)
 	local base         = isKiller and killerAssets or survivorAssets
@@ -223,7 +227,7 @@ local function checkMilestones(player, isKiller, characterName, level)
 					)
 
 					if Debug then
-						print("[MILESTONE] 🎉 " .. player.Name .. " desbloqueou: " .. skinKey .. " (Level " .. level .. ")")
+						print("[MILESTONE] " .. player.Name .. " desbloqueou: " .. skinKey .. " (Level " .. level .. ")")
 					end
 				end
 			end
@@ -253,7 +257,7 @@ local function processLevelUps(xpValue, levelValue, player, isKiller, characterN
 
 		if Debug then
 			print(string.format(
-				"[LEVEL UP!] %s → Level %d em %s (XP restante: %d)",
+				"[LEVEL UP!] %s -> Level %d em %s (XP restante: %d)",
 				player.Name, currentLevel, characterName, currentXP
 				))
 		end
@@ -274,11 +278,11 @@ local function processLevelUps(xpValue, levelValue, player, isKiller, characterN
 	local renderImage = getCharacterRenderImage(characterName, isKiller)
 
 	for _, lvl in ipairs(milestoneLevels) do
-		-- 🔔 Notificação de level up (dispara pra cada nível ganho)
+		-- Notificacao de level up (dispara pra cada nivel ganho)
 		notificationEvent:FireClient(
 			player,
 			"Level Up!",
-			characterName .. " alcançou o nível " .. lvl .. "!",
+			characterName .. " alcancou o nivel " .. lvl .. "!",
 			renderImage or LEVELUP_ICON
 		)
 
@@ -287,7 +291,7 @@ local function processLevelUps(xpValue, levelValue, player, isKiller, characterN
 
 	if Debug then
 		print(string.format(
-			"[XP] %s ganhou %d level(s) em %s → Level %d (XP: %d / Próximo: %d)",
+			"[XP] %s ganhou %d level(s) em %s -> Level %d (XP: %d / Proximo: %d)",
 			player.Name, #milestoneLevels, characterName,
 			currentLevel, currentXP, xpForNextLevel(currentLevel)
 			))
@@ -311,7 +315,7 @@ local function setupXPListener(player, charVal, isKiller, characterName)
 	end)
 
 	if Debug then
-		print("[XP Listener] Ativado: " .. player.Name .. " → " .. characterName)
+		print("[XP Listener] Ativado: " .. player.Name .. " -> " .. characterName)
 	end
 end
 
@@ -327,7 +331,7 @@ local function setupAllXPListeners(player)
 		end
 		killerFolder.ChildAdded:Connect(function(child)
 			if child:IsA("Folder") then return end
-			task.wait(0.1)
+			wait(0.1)
 			if child:FindFirstChild("XP") then
 				setupXPListener(player, child, true, child.Name)
 			end
@@ -342,7 +346,7 @@ local function setupAllXPListeners(player)
 		end
 		survFolder.ChildAdded:Connect(function(child)
 			if child:IsA("Folder") then return end
-			task.wait(0.1)
+			wait(0.1)
 			if child:FindFirstChild("XP") then
 				setupXPListener(player, child, false, child.Name)
 			end
@@ -373,7 +377,7 @@ local function Serialize(plr)
 		for _, child in ipairs(charFolder:GetChildren()) do
 			if not child:IsA("Folder") then
 				if not characterExists(child.Name, isKiller) then
-					warn("[DataSaver] Personagem não existe mais, ignorando: " .. child.Name)
+					warn("[DataSaver] Personagem nao existe mais, ignorando: " .. child.Name)
 				else
 					local xpVal    = child:FindFirstChild("XP")
 					local levelVal = child:FindFirstChild("Level")
@@ -389,7 +393,7 @@ local function Serialize(plr)
 									if skinExists(child.Name, skinName, isKiller) then
 										skinsSaved[sk.Name] = true
 									else
-										warn("[DataSaver] Skin não existe mais, ignorando: " .. sk.Name)
+										warn("[DataSaver] Skin nao existe mais, ignorando: " .. sk.Name)
 									end
 								end
 							end
@@ -497,7 +501,7 @@ local function Apply(plr, data)
 		if not charFolder then return end
 		for charName, charData in pairs(savedChars) do
 			if not characterExists(charName, isKiller) then
-				warn("[DataSaver] Personagem não existe, ignorando: " .. charName)
+				warn("[DataSaver] Personagem nao existe, ignorando: " .. charName)
 			else
 				local charVal = charFolder:FindFirstChild(charName)
 				if not charVal then
@@ -542,7 +546,7 @@ local function Apply(plr, data)
 								sk.Parent  = charSkinsFolder
 							end
 						else
-							warn("[DataSaver] Skin não existe, ignorando: " .. skinKey)
+							warn("[DataSaver] Skin nao existe, ignorando: " .. skinKey)
 						end
 					end
 				end
@@ -582,9 +586,9 @@ local function Save(plr)
 	end
 	local ok, err = pcall(store.SetAsync, store, key, data)
 	if ok then
-		if Debug then print("[DataSaver] ✔ Salvo: " .. plr.Name) end
+		if Debug then print("[DataSaver] Salvo: " .. plr.Name) end
 	else
-		warn("[DataSaver] ✘ Erro ao salvar " .. plr.Name .. ": " .. tostring(err))
+		warn("[DataSaver] Erro ao salvar " .. plr.Name .. ": " .. tostring(err))
 	end
 end
 
@@ -592,14 +596,14 @@ local function Load(plr)
 	local key      = "player_" .. plr.UserId
 	local ok, data = pcall(store.GetAsync, store, key)
 	if not ok then
-		warn("[DataSaver] ✘ Erro ao carregar " .. plr.Name .. ": " .. tostring(data))
+		warn("[DataSaver] Erro ao carregar " .. plr.Name .. ": " .. tostring(data))
 		return
 	end
 	if data then
 		Apply(plr, data)
-		if Debug then print("[DataSaver] ✔ Carregado: " .. plr.Name) end
+		if Debug then print("[DataSaver] Carregado: " .. plr.Name) end
 	else
-		if Debug then print("[DataSaver] ★ Dados novos: " .. plr.Name) end
+		if Debug then print("[DataSaver] Dados novos: " .. plr.Name) end
 	end
 end
 
@@ -609,19 +613,19 @@ end
 
 buyCharacterEvent.OnServerEvent:Connect(function(player, characterName, isKiller)
 	if type(characterName) ~= "string" or type(isKiller) ~= "boolean" then
-		warn("[CharacterHandler] Tipo inválido em BuyCharacter")
+		warn("[CharacterHandler] Tipo invalido em BuyCharacter")
 		return
 	end
 
 	local moduleScript = getModuleScript(characterName, isKiller, nil)
 	if not moduleScript then
-		warn("[CharacterHandler] ModuleScript não encontrado: " .. characterName)
+		warn("[CharacterHandler] ModuleScript nao encontrado: " .. characterName)
 		return
 	end
 
 	local ok, module = pcall(require, moduleScript)
 	if not ok or module.IsSkin then
-		warn("[CharacterHandler] Erro ao carregar módulo ou é uma skin: " .. characterName)
+		warn("[CharacterHandler] Erro ao carregar modulo ou e uma skin: " .. characterName)
 		return
 	end
 
@@ -649,17 +653,17 @@ buyCharacterEvent.OnServerEvent:Connect(function(player, characterName, isKiller
 
 	local charFolder = getCharFolder(player, isKiller)
 	if not charFolder then
-		warn("[CharacterHandler] CharFolder não encontrado: " .. player.Name)
+		warn("[CharacterHandler] CharFolder nao encontrado: " .. player.Name)
 		return
 	end
 
 	if charFolder:FindFirstChild(module.CharacterName) then
-		warn("[CharacterHandler] " .. player.Name .. " já possui: " .. module.CharacterName)
+		warn("[CharacterHandler] " .. player.Name .. " ja possui: " .. module.CharacterName)
 		return
 	end
 
 	if module.CharacterPrice ~= "Free" and module.CharacterPrice > player.leaderstats.Points.Value then
-		warn("[CharacterHandler] " .. player.Name .. " não possui dinheiro para comprar")
+		warn("[CharacterHandler] " .. player.Name .. " nao possui dinheiro para comprar")
 		return
 	end
 
@@ -706,7 +710,7 @@ buyCharacterEvent.OnServerEvent:Connect(function(player, characterName, isKiller
 	)
 
 	if Debug then
-		print("[CharacterHandler] ✔ " .. player.Name .. " comprou: " .. module.CharacterName)
+		print("[CharacterHandler] " .. player.Name .. " comprou: " .. module.CharacterName)
 	end
 end)
 
@@ -716,24 +720,24 @@ end)
 
 buySkinEvent.OnServerEvent:Connect(function(player, characterName, skinName, isKiller)
 	if type(characterName) ~= "string" or type(skinName) ~= "string" or type(isKiller) ~= "boolean" then
-		warn("[CharacterHandler] Tipo inválido em BuySkin")
+		warn("[CharacterHandler] Tipo invalido em BuySkin")
 		return
 	end
 
 	local moduleScript = getModuleScript(characterName, isKiller, skinName)
 	if not moduleScript then
-		warn("[CharacterHandler] ModuleScript de skin não encontrado: " .. skinName)
+		warn("[CharacterHandler] ModuleScript de skin nao encontrado: " .. skinName)
 		return
 	end
 
 	local ok, module = pcall(require, moduleScript)
 	if not ok or not module.IsSkin then
-		warn("[CharacterHandler] Erro ao carregar skin ou não é uma skin")
+		warn("[CharacterHandler] Erro ao carregar skin ou nao e uma skin")
 		return
 	end
 
 	if module.MilestoneLevel then
-		warn("[CharacterHandler] Skin de milestone não pode ser comprada: " .. skinName)
+		warn("[CharacterHandler] Skin de milestone nao pode ser comprada: " .. skinName)
 		return
 	end
 
@@ -761,24 +765,24 @@ buySkinEvent.OnServerEvent:Connect(function(player, characterName, skinName, isK
 
 	local charFolder = getCharFolder(player, isKiller)
 	if not charFolder or not charFolder:FindFirstChild(module.CharacterName) then
-		warn("[CharacterHandler] " .. player.Name .. " não possui: " .. module.CharacterName)
+		warn("[CharacterHandler] " .. player.Name .. " nao possui: " .. module.CharacterName)
 		return
 	end
 
 	local skinsFolder = getSkinsFolder(player, isKiller, module.CharacterName)
 	if not skinsFolder then
-		warn("[CharacterHandler] skinsFolder não encontrado para: " .. player.Name)
+		warn("[CharacterHandler] skinsFolder nao encontrado para: " .. player.Name)
 		return
 	end
 
 	local skinKey = module.CharacterName .. "_" .. module.RigName
 	if skinsFolder:FindFirstChild(skinKey) then
-		warn("[CharacterHandler] " .. player.Name .. " já possui skin: " .. skinKey)
+		warn("[CharacterHandler] " .. player.Name .. " ja possui skin: " .. skinKey)
 		return
 	end
 
 	if module.CharacterPrice ~= "Free" and module.CharacterPrice > player.leaderstats.Points.Value then
-		warn("[CharacterHandler] " .. player.Name .. " não possui dinheiro para comprar")
+		warn("[CharacterHandler] " .. player.Name .. " nao possui dinheiro para comprar")
 		return
 	end
 
@@ -799,7 +803,7 @@ buySkinEvent.OnServerEvent:Connect(function(player, characterName, skinName, isK
 	)
 
 	if Debug then
-		print("[CharacterHandler] ✔ " .. player.Name .. " comprou skin: " .. skinKey)
+		print("[CharacterHandler] " .. player.Name .. " comprou skin: " .. skinKey)
 	end
 end)
 
@@ -809,19 +813,19 @@ end)
 
 equipCharacterEvent.OnServerEvent:Connect(function(player, characterName, isKiller)
 	if type(characterName) ~= "string" or type(isKiller) ~= "boolean" then
-		warn("[CharacterHandler] Tipo inválido em EquipCharacter")
+		warn("[CharacterHandler] Tipo invalido em EquipCharacter")
 		return
 	end
 
 	local moduleScript = getModuleScript(characterName, isKiller, nil)
 	if not moduleScript then
-		warn("[CharacterHandler] ModuleScript não encontrado: " .. characterName)
+		warn("[CharacterHandler] ModuleScript nao encontrado: " .. characterName)
 		return
 	end
 
 	local ok, module = pcall(require, moduleScript)
 	if not ok or module.IsSkin then
-		warn("[CharacterHandler] Erro ao carregar ou é uma skin")
+		warn("[CharacterHandler] Erro ao carregar ou e uma skin")
 		return
 	end
 
@@ -834,7 +838,7 @@ equipCharacterEvent.OnServerEvent:Connect(function(player, characterName, isKill
 
 	local charFolder = getCharFolder(player, isKiller)
 	if not charFolder or not charFolder:FindFirstChild(module.CharacterName) then
-		warn("[CharacterHandler] " .. player.Name .. " não possui: " .. module.CharacterName)
+		warn("[CharacterHandler] " .. player.Name .. " nao possui: " .. module.CharacterName)
 		return
 	end
 
@@ -842,10 +846,10 @@ equipCharacterEvent.OnServerEvent:Connect(function(player, characterName, isKill
 	if equippedVal then
 		equippedVal.Value = module.CharacterName
 		if Debug then
-			print("[CharacterHandler] ✔ " .. player.Name .. " equipou: " .. module.CharacterName)
+			print("[CharacterHandler] " .. player.Name .. " equipou: " .. module.CharacterName)
 		end
 	else
-		warn("[CharacterHandler] EquippedVal não encontrado")
+		warn("[CharacterHandler] EquippedVal nao encontrado")
 	end
 end)
 
@@ -855,38 +859,38 @@ end)
 
 equipSkinEvent.OnServerEvent:Connect(function(player, characterName, skinName, isKiller)
 	if type(characterName) ~= "string" or type(isKiller) ~= "boolean" then
-		warn("[CharacterHandler] Tipo inválido em EquipSkin")
+		warn("[CharacterHandler] Tipo invalido em EquipSkin")
 		return
 	end
 
 	local charFolder = getCharFolder(player, isKiller)
 	if not charFolder or not charFolder:FindFirstChild(characterName) then
-		warn("[CharacterHandler] " .. player.Name .. " não possui: " .. characterName)
+		warn("[CharacterHandler] " .. player.Name .. " nao possui: " .. characterName)
 		return
 	end
 
 	local skinVal = getEquippedSkinValue(player, isKiller, characterName)
 	if not skinVal then
-		warn("[CharacterHandler] SkinVal não encontrado para: " .. characterName)
+		warn("[CharacterHandler] SkinVal nao encontrado para: " .. characterName)
 		return
 	end
 
 	if not skinName or skinName == "Default" then
 		skinVal.Value = "Default"
 		if Debug then
-			print("[CharacterHandler] ✔ " .. player.Name .. " equipou skin Default em: " .. characterName)
+			print("[CharacterHandler] " .. player.Name .. " equipou skin Default em: " .. characterName)
 		end
 		return
 	end
 
 	if type(skinName) ~= "string" then
-		warn("[CharacterHandler] skinName não é string")
+		warn("[CharacterHandler] skinName nao e string")
 		return
 	end
 
 	local moduleScript = getModuleScript(characterName, isKiller, skinName)
 	if not moduleScript then
-		warn("[CharacterHandler] ModuleScript de skin não encontrado: " .. skinName)
+		warn("[CharacterHandler] ModuleScript de skin nao encontrado: " .. skinName)
 		return
 	end
 
@@ -908,13 +912,13 @@ equipSkinEvent.OnServerEvent:Connect(function(player, characterName, skinName, i
 
 	local skinKey = module.CharacterName .. "_" .. module.RigName
 	if not skinsFolder:FindFirstChild(skinKey) then
-		warn("[CharacterHandler] " .. player.Name .. " não possui skin: " .. skinKey)
+		warn("[CharacterHandler] " .. player.Name .. " nao possui skin: " .. skinKey)
 		return
 	end
 
 	skinVal.Value = module.RigName
 	if Debug then
-		print("[CharacterHandler] ✔ " .. player.Name .. " equipou skin: " .. skinKey)
+		print("[CharacterHandler] " .. player.Name .. " equipou skin: " .. skinKey)
 	end
 end)
 
@@ -943,9 +947,9 @@ end)
 --------------------------------------------------
 
 local function StartTimePlayed(plr)
-	task.spawn(function()
+	spawn(function()
 		while plr and plr.Parent do
-			task.wait(1)
+			wait(1)
 			if not (plr and plr.Parent) then break end
 			local pdata = GetPData(plr)
 			if pdata and pdata:FindFirstChild("TimePlayed") then
@@ -959,9 +963,9 @@ end
 -- AUTO-SAVE
 --------------------------------------------------
 
-task.spawn(function()
+spawn(function()
 	while true do
-		task.wait(AUTOSAVE_RATE)
+		wait(AUTOSAVE_RATE)
 		local players = Players:GetPlayers()
 		if Debug then
 			print(string.format("[DataSaver] Auto-save: %d jogador(es)...", #players))
@@ -969,7 +973,7 @@ task.spawn(function()
 		for _, plr in ipairs(players) do
 			Save(plr)
 		end
-		if Debug then print("[DataSaver] ✔ Auto-save concluído.") end
+		if Debug then print("[DataSaver] Auto-save concluido.") end
 	end
 end)
 
@@ -982,15 +986,17 @@ Players.PlayerAdded:Connect(function(plr)
 	plr:WaitForChild("leaderstats", 15)
 
 	Load(plr)
-	task.wait(0.5)
+	wait(0.5)
 	setupAllXPListeners(plr)
 	StartTimePlayed(plr)
 end)
 
 Players.PlayerRemoving:Connect(function(plr)
 	Save(plr)
+	-- prefixo agora inclui "_" pra nao apagar chaves de outro jogador cujo UserId comece igual
+	local prefix = tostring(plr.UserId) .. "_"
 	for key in pairs(xpGuard) do
-		if key:sub(1, #tostring(plr.UserId)) == tostring(plr.UserId) then
+		if key:sub(1, #prefix) == prefix then
 			xpGuard[key] = nil
 		end
 	end
