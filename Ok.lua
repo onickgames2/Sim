@@ -1,7 +1,7 @@
 local gui = script.Parent
 local lbl = gui.Frame.Trying
 local img = gui.Frame.Image
-local frame = gui.Frame 
+local frame = gui.Frame
 local skip = gui.Frame.Skip -- TextButton
 
 local TweenService = game:GetService("TweenService")
@@ -38,6 +38,8 @@ local indexSort = {
 }
 
 -- IDs de imagem
+-- (em 2016 nao existe rbxthumb://, entao usamos rbxassetid://.
+--  Se alguma imagem nao aparecer, use o ID da IMAGEM e nao o do Decal)
 local loadingImages = {
 	"91958826972932",
 	"109639920864046",
@@ -50,7 +52,7 @@ local loadingImages = {
 
 gui.Enabled = true
 
--- Garante visibilidade + remove fundo + começa transparente
+-- Garante visibilidade + remove fundo + comeca transparente
 skip.Visible = true
 skip.BackgroundTransparency = 1
 skip.AutoButtonColor = false
@@ -59,18 +61,27 @@ skip.TextTransparency = 1
 local skipClicked = false
 local finished = false
 
--- Função que define a imagem aleatória uma única vez
+-- Funcao que define a imagem aleatoria uma unica vez
 local function setInitialRandomImage()
 	local randomId = loadingImages[math.random(1, #loadingImages)]
-	img.Image = "rbxthumb://type=Asset&id=" .. randomId .. "&w=420&h=420"
+	img.Image = "rbxassetid://" .. randomId
 end
 
--- Função para criar delays variáveis
+-- Funcao para criar delays variaveis
 local function getRandomDelay()
 	return math.random(1, 10) / 10
 end
 
--- Função que faz fade em TODOS os objetos
+-- GetDescendants nao existia em 2016: percorre os filhos recursivamente
+local function collectDescendants(parent, list)
+	for _, child in ipairs(parent:GetChildren()) do
+		table.insert(list, child)
+		collectDescendants(child, list)
+	end
+	return list
+end
+
+-- Funcao que faz fade em TODOS os objetos
 local function fadeObject(object, tweenInfo)
 	local goals = {}
 
@@ -90,10 +101,6 @@ local function fadeObject(object, tweenInfo)
 		goals.BackgroundTransparency = 1
 	end
 
-	if object:IsA("UIStroke") then
-		goals.Transparency = 1
-	end
-
 	if object:IsA("ScrollingFrame") then
 		goals.BackgroundTransparency = 1
 		goals.ScrollBarImageTransparency = 1
@@ -105,7 +112,7 @@ local function fadeObject(object, tweenInfo)
 	end
 end
 
--- Função que gerencia o Fade Out geral
+-- Funcao que gerencia o Fade Out geral
 local function fadeOutUI()
 	local fadeTime = 1
 	local tweenInfo = TweenInfo.new(
@@ -116,14 +123,14 @@ local function fadeOutUI()
 
 	fadeObject(frame, tweenInfo)
 
-	for _, obj in ipairs(frame:GetDescendants()) do
+	for _, obj in ipairs(collectDescendants(frame, {})) do
 		fadeObject(obj, tweenInfo)
 	end
 
-	task.wait(fadeTime)
+	wait(fadeTime)
 end
 
--- Garante que a finalização só rode uma vez
+-- Garante que a finalizacao so rode uma vez
 local function finishSequence()
 	if finished then return end
 	finished = true
@@ -135,20 +142,9 @@ end
 skip.Active = true
 skip.ZIndex = 1000 -- garante que fica por cima de tudo
 
-print("[Debug] Skip Active:", skip.Active, "| Visible:", skip.Visible, "| ZIndex:", skip.ZIndex)
-print("[Debug] Skip Size:", skip.AbsoluteSize, "| Position:", skip.AbsolutePosition)
-
-skip.InputBegan:Connect(function(input)
-	print("[Debug] InputBegan no Skip:", input.UserInputType)
-end)
-
-skip.MouseEnter:Connect(function()
-	print("[Debug] Mouse entrou na área do Skip")
-end)
-
 -- Fade in do Skip depois de 6 segundos
 local function startSkipTimer()
-	task.wait(6)
+	wait(6)
 
 	if skipClicked then return end
 
@@ -164,29 +160,29 @@ local function startSkipTimer()
 	tween:Play()
 end
 
--- Detecta clique/toque/gamepad no Skip
+-- Detecta clique/toque no Skip
+-- (GuiButton.Activated e novo demais; MouseButton1Click funciona com toque tambem)
 local function setupSkipInput()
-	skip.Activated:Connect(function()
-		print("[Skip] clicado")
+	skip.MouseButton1Click:Connect(function()
 		if skipClicked then return end
 
 		skipClicked = true
 		lbl.Text = "Skipping..."
 
-		task.spawn(function()
-			task.wait(2)
+		spawn(function()
+			wait(2)
 			lbl.Text = "Loading Complete!"
-			task.wait(1)
+			wait(1)
 			finishSequence()
 		end)
 	end)
 end
 
--- Função principal de loading
+-- Funcao principal de loading
 local function loadingSequence()
 	setInitialRandomImage()
 
-	task.spawn(startSkipTimer)
+	spawn(startSkipTimer)
 	setupSkipInput()
 
 	local totalItemsAll = 0
@@ -195,7 +191,7 @@ local function loadingSequence()
 		local folder = folders[folderKey]
 		local count = folder and #folder:GetChildren() or 0
 		folderCounts[folderKey] = count
-		totalItemsAll = totalItemsAll + count -- era +=
+		totalItemsAll = totalItemsAll + count
 	end
 
 	local processedItems = 0
@@ -211,11 +207,11 @@ local function loadingSequence()
 			for _, child in ipairs(children) do
 				if skipClicked then break end
 
-				processedItems = processedItems + 1 -- era +=
+				processedItems = processedItems + 1
 				local percent = totalItemsAll > 0 and math.floor((processedItems / totalItemsAll) * 100) or 100
 				lbl.Text = text .. ": " .. percent .. "%"
 
-				task.wait(getRandomDelay())
+				wait(getRandomDelay())
 			end
 		end
 	end
@@ -225,10 +221,10 @@ local function loadingSequence()
 	end
 
 	lbl.Text = "Loading Complete!"
-	task.wait(1)
+	wait(1)
 
 	finishSequence()
 end
 
--- Iniciar sequência de loading
+-- Iniciar sequencia de loading
 loadingSequence()
