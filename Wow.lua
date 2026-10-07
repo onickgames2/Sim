@@ -25,7 +25,14 @@ local TweenInfoMain = TweenInfo.new(0.2, Enum.EasingStyle.Linear, Enum.EasingDir
 StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health,     false)
 StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
 
--- ─── Função de Formatação de Números (1k, 1m, 1b) ──────────────────────────
+-- Attributes nao existiam em 2016: le um StringValue filho do player com esse nome
+local function getStringValue(obj, name)
+	local v = obj:FindFirstChild(name)
+	if v and v.Value ~= "" then return v.Value end
+	return nil
+end
+
+-- --- Formatacao de numeros (1k, 1m, 1b) ---------------------------------------
 local function formatNumber(num)
 	if num >= 1000000000 then
 		return string.format("%.1f", num / 1000000000):gsub("%.0$", "") .. "b"
@@ -38,7 +45,7 @@ local function formatNumber(num)
 	end
 end
 
--- ─── Função de Formatação de Tempo ──────────────────────────────────────────
+-- --- Formatacao de tempo ------------------------------------------------------
 local function formatTimePlayed(seconds)
 	local days             = math.floor(seconds / 86400)
 	local hours            = math.floor((seconds % 86400) / 3600)
@@ -49,7 +56,7 @@ local function formatTimePlayed(seconds)
 	return string.format("%02d:%02d:%02d:%02d", days, hours, minutes, remainingSeconds)
 end
 
--- ─── showMore ──────────────────────────────────────────────────────────────
+-- --- showMore -----------------------------------------------------------------
 
 local function showMore(player)
 	local playersFolder = script.Parent.Parent.Players
@@ -58,7 +65,7 @@ local function showMore(player)
 	local BroIMG  = Screen.BroImage
 	local deviceI = BroIMG.Device
 
-	-- Verificação de segurança para os dados
+	-- Verificacao de seguranca para os dados
 	local playerData = player:FindFirstChild("PlayerData")
 	if not playerData then return end
 
@@ -92,36 +99,37 @@ local function showMore(player)
 		Unknown = "101346701946159",
 	}
 
-	local deviceKey = player:GetAttribute("Device") or "Unknown"
-	deviceI.Image = "rbxthumb://type=Asset&id=" .. (deviceImages[deviceKey] or deviceImages.Unknown) .. "&w=420&h=420"
+	-- antes era player:GetAttribute("Device"); agora e um StringValue "Device" dentro do player
+	local deviceKey = getStringValue(player, "Device") or "Unknown"
+	deviceI.Image = "rbxassetid://" .. (deviceImages[deviceKey] or deviceImages.Unknown)
 
 	Screen.Visible = true
 
-	-- Loop em tempo real para atualizar o tempo jogado enquanto a Screen estiver visível
+	-- Loop em tempo real para atualizar o tempo jogado enquanto a Screen estiver visivel
 	local timeActive = true
-	task.spawn(function()
+	spawn(function()
 		while timeActive and Screen.Visible and player.Parent and playerData:FindFirstChild("TimePlayed") do
 			local totalSeconds = playerData.TimePlayed.Value
 			Screen.Time.Text = "Time Played: " .. formatTimePlayed(totalSeconds)
-			task.wait(1)
+			wait(1)
 		end
 	end)
 
-	-- Conexão única para evitar múltiplos eventos acumulados
+	-- Conexao unica para evitar multiplos eventos acumulados
 	local connection
 	connection = close.MouseButton1Click:Connect(function()
 		timeActive = false
 		Screen.Visible = false
-		connection:Disconnect()
+		connection:disconnect()
 	end)
 end
 
--- ─── Loop de cards ─────────────────────────────────────────────────────────
+-- --- Loop de cards ------------------------------------------------------------
 
-task.spawn(function()
+spawn(function()
 	local localPlayer = Players.LocalPlayer
 
-	while task.wait(1) do
+	while wait(1) do
 		-- Remove cards de quem saiu do jogo
 		for _, card in ipairs(Main:GetChildren()) do
 			if card:IsA("Frame") and card.Name ~= "Template" then
@@ -140,7 +148,7 @@ task.spawn(function()
 			if points and kc then
 				local card = Main:FindFirstChild(player.Name)
 
-				-- Se o card não existir, cria um novo
+				-- Se o card nao existir, cria um novo
 				if not card then
 					card = Template:Clone()
 					card.Name = player.Name
@@ -152,7 +160,7 @@ task.spawn(function()
 					end)
 				end
 
-				-- Atualiza os textos com formatação
+				-- Atualiza os textos com formatacao
 				card.A.Text = player.Name
 				card.P.Text = formatNumber(points.Value)
 				card.Z.Text = formatNumber(kc.Value)
@@ -161,7 +169,7 @@ task.spawn(function()
 	end
 end)
 
--- ─── Toggle button ─────────────────────────────────────────────────────────
+-- --- Toggle button ------------------------------------------------------------
 
 Button.MouseButton1Click:Connect(function()
 	if Active then
@@ -179,9 +187,9 @@ end)
 
 local pointCounter = script.Parent.Parent.PointCounter
 
-task.spawn(function()
+spawn(function()
 	while game.Players.LocalPlayer.Parent do
-		task.wait(0.1)
+		wait(0.1)
 		local points = game.Players.LocalPlayer.leaderstats.Points
 		pointCounter.Text = formatNumber(points.Value) .. "$"
 	end
