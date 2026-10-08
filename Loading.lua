@@ -56,8 +56,26 @@ skip.BackgroundTransparency = 1
 skip.AutoButtonColor = false
 skip.TextTransparency = 1
 
+-- DEBUG temporário: confirma estado real do Skip assim que o script roda
+print("[Debug] Skip existe?", skip ~= nil, "| Classe:", skip.ClassName)
+print("[Debug] Skip Active:", skip.Active, "| Visible:", skip.Visible, "| ZIndex:", skip.ZIndex)
+print("[Debug] Skip caminho completo:", skip:GetFullName())
+
 local skipClicked = false
 local finished = false
+
+-- Cria (ou pega) o UIStroke da aura no texto de loading
+local aura = lbl:FindFirstChild("AuraStroke")
+if not aura then
+	aura = Instance.new("UIStroke")
+	aura.Name = "AuraStroke"
+	aura.Thickness = 3
+	aura.Color = Color3.fromRGB(255, 255, 255) -- muda a cor da aura aqui
+	aura.LineJoinMode = Enum.LineJoinMode.Round
+	aura.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	aura.Parent = lbl
+end
+aura.Transparency = 1 -- começa invisível
 
 -- Função que define a imagem aleatória uma única vez
 local function setInitialRandomImage()
@@ -70,14 +88,19 @@ local function getRandomDelay()
 	return math.random(1, 10) / 10
 end
 
--- Pisca o texto (usado no "Loading Complete!")
-local function blinkText(times, interval)
-	for _ = 1, times do
-		lbl.Visible = false
-		task.wait(interval)
-		lbl.Visible = true
-		task.wait(interval)
-	end
+-- Acende a aura e depois faz fade out em 0.5s
+local function auraFadeOut()
+	aura.Transparency = 0 -- acende na hora
+
+	local fadeInfo = TweenInfo.new(
+		0.5,
+		Enum.EasingStyle.Quad,
+		Enum.EasingDirection.Out
+	)
+
+	local tween = TweenService:Create(aura, fadeInfo, { Transparency = 1 })
+	tween:Play()
+	tween.Completed:Wait()
 end
 
 -- Função que faz fade em TODOS os objetos 🌸
@@ -162,7 +185,17 @@ end
 
 -- Detecta clique/toque/gamepad no Skip
 local function setupSkipInput()
+	skip.MouseEnter:Connect(function()
+		print("[Debug] Mouse entrou na área do Skip")
+	end)
+
+	skip.InputBegan:Connect(function(input)
+		print("[Debug] InputBegan no Skip:", input.UserInputType)
+	end)
+
 	skip.Activated:Connect(function()
+		print("[Debug] Skip.Activated disparou!")
+
 		if skipClicked then return end
 
 		skipClicked = true
@@ -171,11 +204,12 @@ local function setupSkipInput()
 		task.spawn(function()
 			task.wait(2)
 			lbl.Text = "Loading Complete! 100%"
-			blinkText(3, 0.2)
-			task.wait(0.3)
+			auraFadeOut()
 			finishSequence()
 		end)
 	end)
+
+	print("[Debug] setupSkipInput() rodou e conectou os eventos")
 end
 
 -- Função principal de loading
@@ -218,8 +252,7 @@ local function loadingSequence()
 	end
 
 	lbl.Text = "Loading Complete! 100%"
-	blinkText(3, 0.2)
-	task.wait(0.3)
+	auraFadeOut()
 
 	finishSequence()
 end
