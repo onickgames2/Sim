@@ -11,6 +11,7 @@ local ACHIEVEMENTS_STORE = DataStoreService:GetDataStore("PlayerAchievements")
 local notificationEvent = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("Notification")
 
 local events = ReplicatedStorage:WaitForChild("Events")
+
 local loadingFinishedEvent = events:FindFirstChild("LoadingFinished")
 if not loadingFinishedEvent then
     loadingFinishedEvent = Instance.new("RemoteEvent")
@@ -18,27 +19,54 @@ if not loadingFinishedEvent then
     loadingFinishedEvent.Parent = events
 end
 
+-- [NOVO] RemoteFunction que o client chama pra montar a UI de conquistas
+local getAchievementsFunction = events:FindFirstChild("GetAchievements")
+if not getAchievementsFunction then
+    getAchievementsFunction = Instance.new("RemoteFunction")
+    getAchievementsFunction.Name = "GetAchievements"
+    getAchievementsFunction.Parent = events
+end
+
+-- [NOVO] RemoteEvent disparado pro client quando ele desbloqueia uma conquista,
+-- pra UI atualizar sozinha se estiver aberta na hora
+local achievementUnlockedEvent = events:FindFirstChild("AchievementUnlocked")
+if not achievementUnlockedEvent then
+    achievementUnlockedEvent = Instance.new("RemoteEvent")
+    achievementUnlockedEvent.Name = "AchievementUnlocked"
+    achievementUnlockedEvent.Parent = events
+end
+
 --------------------------------------------------
 -- DEFINIÇÃO DAS CONQUISTAS
--- Adicione novas entradas aqui quando quiser expandir
+-- Adicione novas entradas aqui (nessa lista) quando quiser expandir —
+-- a UI do client busca essa lista pelo RemoteFunction, então atualiza sozinha.
 --------------------------------------------------
-local ACHIEVEMENTS = {
-    FirstJoin = {
+local ACHIEVEMENTS_LIST = {
+    {
+        Id       = "FirstJoin",
         Title    = "Bem-vindo!",
         Subtitle = "Você entrou no jogo pela primeira vez.",
         Icon     = "0", -- troque pelo ID do asset
     },
-    FirstDeath = {
+    {
+        Id       = "FirstDeath",
         Title    = "Primeira Queda",
         Subtitle = "Você morreu pela primeira vez em uma partida.",
         Icon     = "0",
     },
-    FirstWin = {
+    {
+        Id       = "FirstWin",
         Title    = "Primeira Vitória",
         Subtitle = "Você venceu sua primeira partida!",
         Icon     = "0",
     },
 }
+
+-- Lookup rápido por Id (usado pelo Unlock/HasUnlocked)
+local ACHIEVEMENTS = {}
+for _, def in ipairs(ACHIEVEMENTS_LIST) do
+    ACHIEVEMENTS[def.Id] = def
+end
 
 local AchievementService = {}
 
@@ -70,7 +98,7 @@ local function Save(player)
     end
 end
 
--- Desbloqueia uma conquista pro player (só dispara notificação na primeira vez)
+-- Desbloqueia uma conquista pro player (só dispara notificação/evento na primeira vez)
 function AchievementService.Unlock(player, achievementId)
     if not player or not player.Parent then return end
 
@@ -99,6 +127,9 @@ function AchievementService.Unlock(player, achievementId)
         def.Icon
     )
 
+    -- [NOVO] avisa a UI de conquistas, se o client tiver ela aberta
+    achievementUnlockedEvent:FireClient(player, achievementId)
+
     task.spawn(Save, player)
 end
 
@@ -126,5 +157,25 @@ end)
 loadingFinishedEvent.OnServerEvent:Connect(function(player)
     AchievementService.Unlock(player, "FirstJoin")
 end)
+
+-- [NOVO] Monta a lista completa (com estado Unlocked) pro client montar a UI
+getAchievementsFunction.OnServerInvoke = function(player)
+    local userId = player.UserId
+    if not loaded[userId] then
+        Load(player)
+    end
+
+    local result = {}
+    for _, def in ipairs(ACHIEVEMENTS_LIST) do
+        table.insert(result, {
+            Id       = def.Id,
+            Title    = def.Title,
+            Subtitle = def.Subtitle,
+            Icon     = def.Icon,
+            Unlocked = cache[userId][def.Id] == true,
+        })
+    end
+    return result
+end
 
 return AchievementService
