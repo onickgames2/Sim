@@ -70,6 +70,16 @@ local function getRandomDelay()
 	return math.random(1, 10) / 10
 end
 
+-- Pisca o texto (usado no "Loading Complete!")
+local function blinkText(times, interval)
+	for _ = 1, times do
+		lbl.Visible = false
+		task.wait(interval)
+		lbl.Visible = true
+		task.wait(interval)
+	end
+end
+
 -- Função que faz fade em TODOS os objetos 🌸
 local function fadeObject(object, tweenInfo)
 	local goals = {}
@@ -153,7 +163,6 @@ end
 -- Detecta clique/toque/gamepad no Skip
 local function setupSkipInput()
 	skip.Activated:Connect(function()
-		print("[Skip] clicado") -- pode remover depois de confirmar que funciona
 		if skipClicked then return end
 
 		skipClicked = true
@@ -161,8 +170,9 @@ local function setupSkipInput()
 
 		task.spawn(function()
 			task.wait(2)
-			lbl.Text = "Loading Complete!"
-			task.wait(1)
+			lbl.Text = "Loading Complete! 100%"
+			blinkText(3, 0.2)
+			task.wait(0.3)
 			finishSequence()
 		end)
 	end)
@@ -175,16 +185,14 @@ local function loadingSequence()
 	task.spawn(startSkipTimer)
 	setupSkipInput()
 
-	local totalItemsAll = 0
-	local folderCounts = {}
+	local totalItems = 0
 	for _, folderKey in ipairs(indexSort) do
-		local folder = folders[folderKey]
-		local count = folder and #folder:GetChildren() or 0
-		folderCounts[folderKey] = count
-		totalItemsAll += count
+		if folders[folderKey] then
+			totalItems += #folders[folderKey]:GetChildren()
+		end
 	end
 
-	local processedItems = 0
+	local loadedItems = 0
 
 	for _, folderKey in ipairs(indexSort) do
 		if skipClicked then break end
@@ -197,10 +205,9 @@ local function loadingSequence()
 			for _, child in ipairs(children) do
 				if skipClicked then break end
 
-				processedItems += 1
-				local percent = totalItemsAll > 0 and math.floor((processedItems / totalItemsAll) * 100) or 100
+				loadedItems += 1
+				local percent = totalItems > 0 and math.floor((loadedItems / totalItems) * 100) or 100
 				lbl.Text = text .. ": " .. percent .. "%"
-
 				task.wait(getRandomDelay())
 			end
 		end
@@ -210,8 +217,9 @@ local function loadingSequence()
 		return
 	end
 
-	lbl.Text = "Loading Complete!"
-	task.wait(1)
+	lbl.Text = "Loading Complete! 100%"
+	blinkText(3, 0.2)
+	task.wait(0.3)
 
 	finishSequence()
 end
