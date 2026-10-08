@@ -68,14 +68,16 @@ local loadingImages = {
 
 gui.Enabled = true
 
--- Configuração do Skip
+-- Coloca a ScreenGui inteira acima das outras
+gui.DisplayOrder = 9999
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Configuração FORÇADA do Skip
 skip.Visible = true
 skip.Active = true
 skip.Selectable = true
-skip.AutoButtonColor = false
-
--- Deixa o botão acima dos outros elementos
-skip.ZIndex = 100
+skip.AutoButtonColor = true
+skip.ZIndex = 9999
 
 skip.BackgroundTransparency = 1
 skip.TextTransparency = 1
@@ -339,7 +341,6 @@ end
 --------------------------------------------------
 
 local function startSkipTimer()
-
 	task.wait(6)
 
 	if skipClicked or finished then
@@ -348,19 +349,19 @@ local function startSkipTimer()
 
 	print("[Loading] Mostrando botão Skip!")
 
+	skip.Visible = true
+	skip.Active = true
+	skip.ZIndex = 9999
+
 	local fadeInInfo = TweenInfo.new(
 		0.5,
 		Enum.EasingStyle.Quad,
 		Enum.EasingDirection.Out
 	)
 
-	local tween = TweenService:Create(
-		skip,
-		fadeInInfo,
-		{
-			TextTransparency = 0
-		}
-	)
+	local tween = TweenService:Create(skip, fadeInInfo, {
+		TextTransparency = 0
+	})
 
 	tween:Play()
 end
