@@ -1,5 +1,4 @@
 local gui = script.Parent
-
 local frame = gui.Frame
 local lbl = frame.Trying
 local img = frame.Image
@@ -341,6 +340,7 @@ end
 --------------------------------------------------
 
 local function startSkipTimer()
+
 	task.wait(6)
 
 	if skipClicked or finished then
@@ -351,6 +351,7 @@ local function startSkipTimer()
 
 	skip.Visible = true
 	skip.Active = true
+	skip.Selectable = true
 	skip.ZIndex = 9999
 
 	local fadeInInfo = TweenInfo.new(
@@ -359,9 +360,13 @@ local function startSkipTimer()
 		Enum.EasingDirection.Out
 	)
 
-	local tween = TweenService:Create(skip, fadeInInfo, {
-		TextTransparency = 0
-	})
+	local tween = TweenService:Create(
+		skip,
+		fadeInInfo,
+		{
+			TextTransparency = 0
+		}
+	)
 
 	tween:Play()
 end
