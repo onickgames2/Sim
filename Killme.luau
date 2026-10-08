@@ -1,3 +1,4 @@
+
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local PhysicsService = game:GetService("PhysicsService")
@@ -6,24 +7,22 @@ local BODY_TIME = 15
 local FADE_TIME = 3
 local RESPAWN_TIME = 5
 
+local CORPSE_GROUP = "Corpse"
+
 --------------------------------------------------
 -- COLLISION GROUP
 --------------------------------------------------
-
-local CORPSE_GROUP = "Corpse"
 
 pcall(function()
 	PhysicsService:RegisterCollisionGroup(CORPSE_GROUP)
 end)
 
--- Cadáveres NÃO colidem com eles mesmos (evita que o ragdoll trema ou voe).
 PhysicsService:CollisionGroupSetCollidable(
 	CORPSE_GROUP,
 	CORPSE_GROUP,
 	false
 )
 
--- Mantém colisão com o grupo padrão (chão, paredes, outros players).
 PhysicsService:CollisionGroupSetCollidable(
 	CORPSE_GROUP,
 	"Default",
@@ -31,7 +30,7 @@ PhysicsService:CollisionGroupSetCollidable(
 )
 
 --------------------------------------------------
--- RETORNA A PARTE CENTRAL DO CORPO
+-- ROOT DO CORPO
 --------------------------------------------------
 
 local function GetRootLimb(character)
@@ -41,60 +40,38 @@ local function GetRootLimb(character)
 end
 
 --------------------------------------------------
--- RAGDOLL
+-- PREPARA O CADÁVER
 --------------------------------------------------
 
-local function Ragdoll(character)
+local function Ragdoll(corpse)
 
-	print("[Ragdoll] Iniciando pra", character.Name)
-
-	local player = Players:GetPlayerFromCharacter(character)
-
-	if character:GetAttribute("IsRagdolled") then
+	if not corpse or not corpse.Parent then
 		return
 	end
 
-	character:SetAttribute("IsRagdolled", true)
+	print("[Ragdoll] Preparando", corpse.Name)
 
-	--------------------------------------------------
-	-- CLONA ANTES DE MODIFICAR O ORIGINAL
-	--------------------------------------------------
-
-	character.Archivable = true
-
-	local corpse = character:Clone()
-
-	if not corpse then
-		warn("[Ragdoll] Falha ao clonar", character.Name)
-		return
+	-- Remove scripts para impedir que alterem a física.
+	for _, obj in ipairs(corpse:GetDescendants()) do
+		if obj:IsA("Script")
+			or obj:IsA("LocalScript")
+			or obj:IsA("ModuleScript") then
+			obj:Destroy()
+		end
 	end
 
-	corpse.Name = character.Name .. "_Corpse"
-	corpse:SetAttribute("IsRagdolled", true)
-	corpse.Parent = workspace
+	local hum = corpse:FindFirstChildOfClass("Humanoid")
 
-	--------------------------------------------------
-	-- REMOVE O ORIGINAL
-	--------------------------------------------------
+	if hum then
+		hum.DisplayDistanceType =
+			Enum.HumanoidDisplayDistanceType.None
 
-	character:Destroy()
-
-	--------------------------------------------------
-	-- RESPAWN
-	--------------------------------------------------
-
-	if player then
-		task.delay(RESPAWN_TIME, function()
-			if player.Parent then
-				player:LoadCharacter()
-			end
-		end)
+		hum.BreakJointsOnDeath = false
+		hum.PlatformStand = true
+		hum.AutoRotate = false
 	end
 
-	--------------------------------------------------
-	-- REMOVE O HUMANOIDROOTPART DO CADÁVER
-	--------------------------------------------------
-
+	-- Remove o RootPart do cadáver.
 	local root = corpse:FindFirstChild("HumanoidRootPart")
 
 	if root then
@@ -102,64 +79,23 @@ local function Ragdoll(character)
 	end
 
 	--------------------------------------------------
-	-- REMOVE SCRIPTS
-	-- (ex: Animate, pra não brigar com a física do ragdoll)
-	--------------------------------------------------
-
-	for _, v in ipairs(corpse:GetDescendants()) do
-
-		if v:IsA("LocalScript")
-			or v:IsA("Script") then
-
-			if v.Name ~= "DeathHandler" then
-				v:Destroy()
-			end
-
-		end
-
-	end
-
-	--------------------------------------------------
-	-- HUMANOID
-	--------------------------------------------------
-
-	local hum = corpse:FindFirstChildOfClass("Humanoid")
-
-	if hum then
-
-		hum.DisplayDistanceType =
-			Enum.HumanoidDisplayDistanceType.None
-
-		hum.BreakJointsOnDeath = false
-
-		hum.PlatformStand = true
-
-		hum.AutoRotate = false
-
-	end
-
-	--------------------------------------------------
 	-- MOTOR6D -> BALL SOCKET
 	--------------------------------------------------
 
 	for _, joint in ipairs(corpse:GetDescendants()) do
-
 		if joint:IsA("Motor6D")
 			and joint.Part0
 			and joint.Part1 then
 
-			local part0 = joint.Part0
-			local part1 = joint.Part1
-
 			local att0 = Instance.new("Attachment")
 			att0.Name = "RagdollAttachment0"
 			att0.CFrame = joint.C0
-			att0.Parent = part0
+			att0.Parent = joint.Part0
 
 			local att1 = Instance.new("Attachment")
 			att1.Name = "RagdollAttachment1"
 			att1.CFrame = joint.C1
-			att1.Parent = part1
+			att1.Parent = joint.Part1
 
 			local socket = Instance.new("BallSocketConstraint")
 			socket.Name = "RagdollConstraint"
@@ -175,97 +111,68 @@ local function Ragdoll(character)
 
 			socket.MaxFrictionTorque = 100
 			socket.Restitution = 0
-
 			socket.Parent = joint.Parent
 
 			joint:Destroy()
-
 		end
-
 	end
 
 	--------------------------------------------------
-	-- FÍSICA + COLISÃO EM TODAS AS PARTES
+	-- COLISÃO E FÍSICA
 	--------------------------------------------------
 
 	for _, part in ipairs(corpse:GetDescendants()) do
-
 		if part:IsA("BasePart") then
-
 			part.Anchored = false
 			part.Massless = false
+
 			part.CanCollide = true
 			part.CanTouch = true
 			part.CanQuery = true
+
 			part.CollisionGroup = CORPSE_GROUP
 
 			part.CustomPhysicalProperties =
-				PhysicalProperties.new(
-					0.7, -- Density
-					0.6, -- Friction
-					0,   -- Elasticity
-					100, -- FrictionWeight
-					100  -- ElasticityWeight
-				)
-
+				PhysicalProperties.new(0.7, 0.6, 0, 1, 1)
 		end
-
 	end
 
 	--------------------------------------------------
-	-- NETWORK OWNERSHIP
-	--
-	-- O cadáver não pertence a nenhum Player, então
-	-- o servidor assume a física de todas as partes.
+	-- CONTROLE DA FÍSICA PELO SERVIDOR
 	--------------------------------------------------
-
-	local rootLimb = GetRootLimb(corpse)
-
-	if rootLimb then
-		corpse.PrimaryPart = rootLimb
-	end
 
 	for _, part in ipairs(corpse:GetDescendants()) do
-
 		if part:IsA("BasePart") then
-
 			pcall(function()
 				part:SetNetworkOwner(nil)
 			end)
-
 		end
-
 	end
-
-	print(
-		"[Ragdoll] Física configurada para",
-		corpse.Name
-	)
 
 	--------------------------------------------------
 	-- IMPACTO INICIAL
 	--------------------------------------------------
 
+	local rootLimb = GetRootLimb(corpse)
+
 	if rootLimb then
+		rootLimb.AssemblyLinearVelocity = Vector3.new(
+			math.random(-4, 4),
+			12,
+			math.random(-4, 4)
+		)
 
-		rootLimb.AssemblyLinearVelocity =
-			Vector3.new(
-				math.random(-4, 4),
-				12,
-				math.random(-4, 4)
-			)
-
-		rootLimb.AssemblyAngularVelocity =
-			Vector3.new(
-				math.random(-10, 10),
-				math.random(-10, 10),
-				math.random(-10, 10)
-			)
-
+		rootLimb.AssemblyAngularVelocity = Vector3.new(
+			math.random(-10, 10),
+			math.random(-10, 10),
+			math.random(-10, 10)
+		)
 	end
 
+	print("[Ragdoll] Cadáver ativo:", corpse.Name)
+
 	--------------------------------------------------
-	-- TEMPO DO CADÁVER
+	-- TEMPO NO MAPA
 	--------------------------------------------------
 
 	task.wait(BODY_TIME)
@@ -278,14 +185,12 @@ local function Ragdoll(character)
 	-- FADE
 	--------------------------------------------------
 
-	local tweenInfo =
-		TweenInfo.new(
-			FADE_TIME,
-			Enum.EasingStyle.Linear
-		)
+	local tweenInfo = TweenInfo.new(
+		FADE_TIME,
+		Enum.EasingStyle.Linear
+	)
 
 	for _, obj in ipairs(corpse:GetDescendants()) do
-
 		if obj:IsA("BasePart")
 			or obj:IsA("Decal")
 			or obj:IsA("Texture") then
@@ -293,52 +198,109 @@ local function Ragdoll(character)
 			TweenService:Create(
 				obj,
 				tweenInfo,
-				{ Transparency = 1 }
+				{Transparency = 1}
 			):Play()
-
 		end
-
 	end
-
-	--------------------------------------------------
-	-- DESTROI
-	--------------------------------------------------
 
 	task.wait(FADE_TIME)
 
 	if corpse.Parent then
 		corpse:Destroy()
 	end
+end
 
+--------------------------------------------------
+-- MORTE E RESPAWN
+--------------------------------------------------
+
+local function OnCharacterAdded(player, character)
+
+	local humanoid = character:WaitForChild("Humanoid")
+	humanoid.BreakJointsOnDeath = false
+
+	humanoid.Died:Connect(function()
+
+		if character:GetAttribute("DeathHandled") then
+			return
+		end
+
+		character:SetAttribute("DeathHandled", true)
+
+		print("[Ragdoll] Morte detectada:", player.Name)
+
+		--------------------------------------------------
+		-- GUARDA A CÓPIA ANTES DO RESPAWN
+		--------------------------------------------------
+
+		character.Archivable = true
+
+		local corpse = character:Clone()
+
+		if not corpse then
+			warn("[Ragdoll] Não foi possível clonar", player.Name)
+			return
+		end
+
+		corpse.Name = player.Name .. "_Corpse"
+
+		-- Guarda a posição do personagem morto.
+		local originalPivot = character:GetPivot()
+
+		-- Mantém o cadáver fora do Workspace até o respawn.
+		corpse.Parent = nil
+
+		--------------------------------------------------
+		-- ESPERA O RESPAWN
+		--------------------------------------------------
+
+		task.delay(RESPAWN_TIME, function()
+
+			if not player.Parent then
+				corpse:Destroy()
+				return
+			end
+
+			-- Confirma que o jogador realmente renasceu.
+			local newCharacter = player.Character
+
+			if not newCharacter or newCharacter == character then
+				-- Não cria o cadáver sobre o personagem antigo.
+				corpse:Destroy()
+				warn("[Ragdoll] O novo personagem ainda não apareceu.")
+				return
+			end
+
+			--------------------------------------------------
+			-- CRIA O CADÁVER APÓS O RESPAWN
+			--------------------------------------------------
+
+			corpse:PivotTo(originalPivot)
+			corpse.Parent = workspace
+
+			task.spawn(Ragdoll, corpse)
+
+		end)
+	end)
 end
 
 --------------------------------------------------
 -- PLAYER ADDED
 --------------------------------------------------
 
-Players.PlayerAdded:Connect(function(player)
+local function SetupPlayer(player)
 
 	player.CharacterAdded:Connect(function(character)
-
-		local humanoid =
-			character:WaitForChild("Humanoid")
-
-		humanoid.BreakJointsOnDeath = false
-
-		humanoid.Died:Connect(function()
-
-			print(
-				"[Ragdoll] Died disparou pra",
-				character.Name
-			)
-
-			task.spawn(
-				Ragdoll,
-				character
-			)
-
-		end)
-
+		OnCharacterAdded(player, character)
 	end)
 
-end)
+	if player.Character then
+		task.spawn(OnCharacterAdded, player, player.Character)
+	end
+end
+
+Players.PlayerAdded:Connect(SetupPlayer)
+
+for _, player in ipairs(Players:GetPlayers()) do
+	SetupPlayer(player)
+end
