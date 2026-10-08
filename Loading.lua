@@ -1,23 +1,31 @@
 local gui = script.Parent
-local lbl = gui.Frame.Trying
-local img = gui.Frame.Image
-local frame = gui.Frame 
-local skip = gui.Frame.Skip -- TextButton
+
+local frame = gui.Frame
+local lbl = frame.Trying
+local img = frame.Image
+local skip = frame.Skip -- TextButton
 
 local TweenService = game:GetService("TweenService")
 
--- folders
-local rp = game.ReplicatedStorage
+--------------------------------------------------
+-- REPLICATED STORAGE
+--------------------------------------------------
+
+local rp = game:GetService("ReplicatedStorage")
+
 local folders = {
-	["modules"] = rp.Modules,
-	["animations"] = rp.Animations,
-	["assets"] = rp.Assets,
-	["events"] = rp.Events,
-	["revents"] = rp.RemoteEvents,
-	["flow"] = rp.FlowGameManager
+	["modules"] = rp:WaitForChild("Modules"),
+	["animations"] = rp:WaitForChild("Animations"),
+	["assets"] = rp:WaitForChild("Assets"),
+	["events"] = rp:WaitForChild("Events"),
+	["revents"] = rp:WaitForChild("RemoteEvents"),
+	["flow"] = rp:WaitForChild("FlowGameManager")
 }
 
--- tabela de textos
+--------------------------------------------------
+-- TEXTOS
+--------------------------------------------------
+
 local indexText = {
 	["events"] = "Loading Server Events",
 	["flow"] = "Downloading FlowGame Manager",
@@ -27,7 +35,10 @@ local indexText = {
 	["animations"] = "Downloading Animations and Emotes"
 }
 
--- ordem de carregamento
+--------------------------------------------------
+-- ORDEM DE CARREGAMENTO
+--------------------------------------------------
+
 local indexSort = {
 	[1] = "events",
 	[2] = "revents",
@@ -37,7 +48,10 @@ local indexSort = {
 	[6] = "flow"
 }
 
--- IDs de imagem
+--------------------------------------------------
+-- IMAGENS DE LOADING
+--------------------------------------------------
+
 local loadingImages = {
 	"91958826972932",
 	"109639920864046",
@@ -48,49 +62,90 @@ local loadingImages = {
 	"90361552835297"
 }
 
+--------------------------------------------------
+-- CONFIGURAÇÃO INICIAL
+--------------------------------------------------
+
 gui.Enabled = true
 
--- Garante visibilidade + remove fundo + começa transparente
+-- Configuração do Skip
 skip.Visible = true
-skip.BackgroundTransparency = 1
+skip.Active = true
+skip.Selectable = true
 skip.AutoButtonColor = false
+
+-- Deixa o botão acima dos outros elementos
+skip.ZIndex = 100
+
+skip.BackgroundTransparency = 1
 skip.TextTransparency = 1
 
--- DEBUG temporário: confirma estado real do Skip assim que o script roda
-print("[Debug] Skip existe?", skip ~= nil, "| Classe:", skip.ClassName)
-print("[Debug] Skip Active:", skip.Active, "| Visible:", skip.Visible, "| ZIndex:", skip.ZIndex)
-print("[Debug] Skip caminho completo:", skip:GetFullName())
+--------------------------------------------------
+-- ESTADOS
+--------------------------------------------------
 
 local skipClicked = false
 local finished = false
 
--- Cria (ou pega) o UIStroke da aura no texto de loading
+--------------------------------------------------
+-- DEBUG
+--------------------------------------------------
+
+print("====================================")
+print("[Loading] Script iniciado")
+print("[Loading] Skip:", skip:GetFullName())
+print("[Loading] Classe:", skip.ClassName)
+print("[Loading] Visible:", skip.Visible)
+print("[Loading] Active:", skip.Active)
+print("[Loading] ZIndex:", skip.ZIndex)
+print("====================================")
+
+--------------------------------------------------
+-- AURA DO TEXTO
+--------------------------------------------------
+
 local aura = lbl:FindFirstChild("AuraStroke")
+
 if not aura then
 	aura = Instance.new("UIStroke")
 	aura.Name = "AuraStroke"
 	aura.Thickness = 3
-	aura.Color = Color3.fromRGB(255, 255, 255) -- muda a cor da aura aqui
+	aura.Color = Color3.fromRGB(255, 255, 255)
 	aura.LineJoinMode = Enum.LineJoinMode.Round
 	aura.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	aura.Parent = lbl
 end
-aura.Transparency = 1 -- começa invisível
 
--- Função que define a imagem aleatória uma única vez
+aura.Transparency = 1
+
+--------------------------------------------------
+-- IMAGEM ALEATÓRIA
+--------------------------------------------------
+
 local function setInitialRandomImage()
 	local randomId = loadingImages[math.random(1, #loadingImages)]
-	img.Image = "rbxthumb://type=Asset&id=" .. randomId .. "&w=420&h=420"
+
+	img.Image =
+		"rbxthumb://type=Asset&id="
+		.. randomId
+		.. "&w=420&h=420"
 end
 
--- Função para criar delays variáveis
+--------------------------------------------------
+-- DELAY ALEATÓRIO
+--------------------------------------------------
+
 local function getRandomDelay()
 	return math.random(1, 10) / 10
 end
 
--- Acende a aura e depois faz fade out em 0.5s
+--------------------------------------------------
+-- FADE DA AURA
+--------------------------------------------------
+
 local function auraFadeOut()
-	aura.Transparency = 0 -- acende na hora
+
+	aura.Transparency = 0
 
 	local fadeInfo = TweenInfo.new(
 		0.5,
@@ -98,27 +153,44 @@ local function auraFadeOut()
 		Enum.EasingDirection.Out
 	)
 
-	local tween = TweenService:Create(aura, fadeInfo, { Transparency = 1 })
+	local tween = TweenService:Create(
+		aura,
+		fadeInfo,
+		{
+			Transparency = 1
+		}
+	)
+
 	tween:Play()
 	tween.Completed:Wait()
 end
 
--- Função que faz fade em TODOS os objetos 🌸
+--------------------------------------------------
+-- FADE DOS OBJETOS
+--------------------------------------------------
+
 local function fadeObject(object, tweenInfo)
+
 	local goals = {}
 
 	if object:IsA("Frame") then
 		goals.BackgroundTransparency = 1
 	end
 
-	if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
+	if object:IsA("TextLabel")
+		or object:IsA("TextButton")
+		or object:IsA("TextBox") then
+
 		goals.TextTransparency = 1
+
 		if object ~= skip then
 			goals.BackgroundTransparency = 1
 		end
 	end
 
-	if object:IsA("ImageLabel") or object:IsA("ImageButton") then
+	if object:IsA("ImageLabel")
+		or object:IsA("ImageButton") then
+
 		goals.ImageTransparency = 1
 		goals.BackgroundTransparency = 1
 	end
@@ -133,14 +205,25 @@ local function fadeObject(object, tweenInfo)
 	end
 
 	if next(goals) then
-		local tween = TweenService:Create(object, tweenInfo, goals)
+
+		local tween = TweenService:Create(
+			object,
+			tweenInfo,
+			goals
+		)
+
 		tween:Play()
 	end
 end
 
--- Função que gerencia o Fade Out geral ✨
+--------------------------------------------------
+-- FADE OUT DA GUI
+--------------------------------------------------
+
 local function fadeOutUI()
+
 	local fadeTime = 1
+
 	local tweenInfo = TweenInfo.new(
 		fadeTime,
 		Enum.EasingStyle.Linear,
@@ -156,20 +239,114 @@ local function fadeOutUI()
 	task.wait(fadeTime)
 end
 
--- Garante que a finalização só rode uma vez
+--------------------------------------------------
+-- FINALIZAR
+--------------------------------------------------
+
 local function finishSequence()
-	if finished then return end
+
+	if finished then
+		return
+	end
+
 	finished = true
 
+	print("[Loading] Finalizando loading...")
+
 	fadeOutUI()
+
 	gui.Enabled = false
+
+	print("[Loading] GUI desativada!")
 end
 
--- Fade in do Skip depois de 6 segundos
+--------------------------------------------------
+-- SKIP
+--------------------------------------------------
+
+local function activateSkip()
+
+	if skipClicked then
+		return
+	end
+
+	skipClicked = true
+
+	print("[Loading] SKIP ATIVADO!")
+
+	lbl.Text = "Skipping..."
+
+	task.spawn(function()
+
+		task.wait(2)
+
+		if finished then
+			return
+		end
+
+		lbl.Text = "Loading Complete! 100%"
+
+		auraFadeOut()
+
+		finishSequence()
+	end)
+end
+
+--------------------------------------------------
+-- INPUT DO SKIP
+--------------------------------------------------
+
+local function setupSkipInput()
+
+	-- Clique do mouse
+	skip.MouseButton1Click:Connect(function()
+
+		print("[Loading] MouseButton1Click!")
+
+		activateSkip()
+	end)
+
+	-- Touch / Gamepad / input geral
+	skip.Activated:Connect(function()
+
+		print("[Loading] Activated!")
+
+		activateSkip()
+	end)
+
+	-- Debug: mouse entrou
+	skip.MouseEnter:Connect(function()
+
+		print("[Loading] Mouse entrou no Skip")
+
+	end)
+
+	-- Debug: qualquer input
+	skip.InputBegan:Connect(function(input)
+
+		print(
+			"[Loading] InputBegan:",
+			input.UserInputType
+		)
+
+	end)
+
+	print("[Loading] Eventos do Skip conectados!")
+end
+
+--------------------------------------------------
+-- TIMER DO SKIP
+--------------------------------------------------
+
 local function startSkipTimer()
+
 	task.wait(6)
 
-	if skipClicked then return end
+	if skipClicked or finished then
+		return
+	end
+
+	print("[Loading] Mostrando botão Skip!")
 
 	local fadeInInfo = TweenInfo.new(
 		0.5,
@@ -177,85 +354,119 @@ local function startSkipTimer()
 		Enum.EasingDirection.Out
 	)
 
-	local tween = TweenService:Create(skip, fadeInInfo, {
-		TextTransparency = 0
-	})
+	local tween = TweenService:Create(
+		skip,
+		fadeInInfo,
+		{
+			TextTransparency = 0
+		}
+	)
+
 	tween:Play()
 end
 
--- Detecta clique/toque/gamepad no Skip
-local function setupSkipInput()
-	skip.MouseEnter:Connect(function()
-		print("[Debug] Mouse entrou na área do Skip")
-	end)
+--------------------------------------------------
+-- LOADING PRINCIPAL
+--------------------------------------------------
 
-	skip.InputBegan:Connect(function(input)
-		print("[Debug] InputBegan no Skip:", input.UserInputType)
-	end)
-
-	skip.Activated:Connect(function()
-		print("[Debug] Skip.Activated disparou!")
-
-		if skipClicked then return end
-
-		skipClicked = true
-		lbl.Text = "Skipping..."
-
-		task.spawn(function()
-			task.wait(2)
-			lbl.Text = "Loading Complete! 100%"
-			auraFadeOut()
-			finishSequence()
-		end)
-	end)
-
-	print("[Debug] setupSkipInput() rodou e conectou os eventos")
-end
-
--- Função principal de loading
 local function loadingSequence()
+
 	setInitialRandomImage()
 
-	task.spawn(startSkipTimer)
+	-- Configura os inputs antes de começar
 	setupSkipInput()
 
+	-- Começa o timer do Skip
+	task.spawn(startSkipTimer)
+
+	--------------------------------------------------
+	-- CALCULAR TOTAL
+	--------------------------------------------------
+
 	local totalItems = 0
+
 	for _, folderKey in ipairs(indexSort) do
+
 		if folders[folderKey] then
+
 			totalItems += #folders[folderKey]:GetChildren()
+
 		end
 	end
 
 	local loadedItems = 0
 
-	for _, folderKey in ipairs(indexSort) do
-		if skipClicked then break end
+	--------------------------------------------------
+	-- CARREGAMENTO
+	--------------------------------------------------
 
-		if folders[folderKey] then
-			local folder = folders[folderKey]
+	for _, folderKey in ipairs(indexSort) do
+
+		if skipClicked then
+			break
+		end
+
+		local folder = folders[folderKey]
+
+		if folder then
+
 			local children = folder:GetChildren()
-			local text = indexText[folderKey] or folderKey
+
+			local text =
+				indexText[folderKey]
+				or folderKey
 
 			for _, child in ipairs(children) do
-				if skipClicked then break end
+
+				if skipClicked then
+					break
+				end
 
 				loadedItems += 1
-				local percent = totalItems > 0 and math.floor((loadedItems / totalItems) * 100) or 100
-				lbl.Text = text .. ": " .. percent .. "%"
+
+				local percent = 100
+
+				if totalItems > 0 then
+
+					percent = math.floor(
+						(loadedItems / totalItems) * 100
+					)
+
+				end
+
+				lbl.Text =
+					text
+					.. ": "
+					.. percent
+					.. "%"
+
 				task.wait(getRandomDelay())
+
 			end
 		end
 	end
+
+	--------------------------------------------------
+	-- SE FOI PULADO
+	--------------------------------------------------
 
 	if skipClicked then
 		return
 	end
 
+	--------------------------------------------------
+	-- FINAL NORMAL
+	--------------------------------------------------
+
 	lbl.Text = "Loading Complete! 100%"
+
 	auraFadeOut()
 
 	finishSequence()
 end
 
--- Iniciar sequência de loading
+--------------------------------------------------
+-- INICIAR
+--------------------------------------------------
+
 loadingSequence()
