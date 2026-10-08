@@ -1,8 +1,10 @@
 local gui = script.Parent
+
 local frame = gui.Frame
 local lbl = frame.Trying
 local img = frame.Image
-local skip = frame.Skip -- TextButton
+local skip = frame.Skip
+local skippingLabel = frame:WaitForChild("Skipping")
 
 local TweenService = game:GetService("TweenService")
 
@@ -80,6 +82,8 @@ skip.ZIndex = 9999
 
 skip.BackgroundTransparency = 1
 skip.TextTransparency = 1
+
+skippingLabel.Visible = false
 
 --------------------------------------------------
 -- ESTADOS
@@ -262,74 +266,16 @@ local function finishSequence()
 end
 
 --------------------------------------------------
--- SKIP
---------------------------------------------------
-
-local function activateSkip()
-
-	if skipClicked then
-		return
-	end
-
-	skipClicked = true
-
-	print("[Loading] SKIP ATIVADO!")
-
-	lbl.Text = "Skipping..."
-
-	task.spawn(function()
-
-		task.wait(2)
-
-		if finished then
-			return
-		end
-
-		lbl.Text = "Loading Complete! 100%"
-
-		auraFadeOut()
-
-		finishSequence()
-	end)
-end
-
---------------------------------------------------
 -- INPUT DO SKIP
 --------------------------------------------------
 
 local function setupSkipInput()
 
-	-- Clique do mouse
-	skip.MouseButton1Click:Connect(function()
-
-		print("[Loading] MouseButton1Click!")
-
-		activateSkip()
-	end)
-
-	-- Touch / Gamepad / input geral
 	skip.Activated:Connect(function()
+		print("[Loading] SKIP CLICADO!")
 
-		print("[Loading] Activated!")
-
-		activateSkip()
-	end)
-
-	-- Debug: mouse entrou
-	skip.MouseEnter:Connect(function()
-
-		print("[Loading] Mouse entrou no Skip")
-
-	end)
-
-	-- Debug: qualquer input
-	skip.InputBegan:Connect(function(input)
-
-		print(
-			"[Loading] InputBegan:",
-			input.UserInputType
-		)
-
+		skippingLabel.Visible = true
+		skip.Visible = false
 	end)
 
 	print("[Loading] Eventos do Skip conectados!")
@@ -343,7 +289,7 @@ local function startSkipTimer()
 
 	task.wait(6)
 
-	if skipClicked or finished then
+	if skippingLabel.Visible or finished then
 		return
 	end
 
@@ -408,7 +354,7 @@ local function loadingSequence()
 
 	for _, folderKey in ipairs(indexSort) do
 
-		if skipClicked then
+		if skippingLabel.Visible then
 			break
 		end
 
@@ -424,7 +370,7 @@ local function loadingSequence()
 
 			for _, child in ipairs(children) do
 
-				if skipClicked then
+				if skippingLabel.Visible then
 					break
 				end
 
@@ -456,7 +402,18 @@ local function loadingSequence()
 	-- SE FOI PULADO
 	--------------------------------------------------
 
-	if skipClicked then
+	if skippingLabel.Visible then
+		print("[Loading] Detectei Skipping! Pulando loading...")
+
+		lbl.Text = "Skipping..."
+
+		task.wait(2)
+
+		lbl.Text = "Loading Complete! 100%"
+
+		auraFadeOut()
+		finishSequence()
+
 		return
 	end
 
